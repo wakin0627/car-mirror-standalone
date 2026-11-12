@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="zh-rCN">
+    <string name="lay_display">显示</string>
+    <string name="lay_disclaimer_intro">首次使用前请完整阅读。接受后可在主界面底部随时重看。</string>
+    <string name="lay_decline">放弃使用</string>
+    <string name="cd_back">返回</string>
+    <string name="cd_bt_device">蓝牙设备</string>
+    <string name="lay_display_desc">视频流按车机分辨率的百分比编码画面。分辨率改动下次连接起效；帧率为推流刷新频率，切换实时生效。</string>
+    <string name="lay_screen_off">连接时真息屏</string>
+    <string name="lay_on">开</string>
+    <string name="lay_off_short">关</string>
+    <string name="lay_screen_off_desc">连接成功后物理断电手机面板（系统保持唤醒）；关闭则只用暗幕。按电源键两次可恢复屏幕。</string>
+    <string name="lay_auto_connect">上车自动连接</string>
+    <string name="lay_auto_connect_desc">车机蓝牙连上时自动拉起会话（需 Shizuku 已启动）。需要「显示在其他应用上层」权限才能在后台启动；该权限缺失时会自动补授。</string>
+    <string name="lay_hid_raw">HID 原始日志</string>
+    <string name="lay_hid_raw_desc">键位校准用：打开后每帧 HID 报文写一行 HID-RAW（uuid + hex 字节），对照按下方向盘/旋钮时打印的字节调整键位映射。平时请关闭，避免日志刷屏。</string>
+    <string name="lay_plain_fallback">兼容兜底：配对失败后尝试明文</string>
+    <string name="lay_plain_fallback_desc">默认关。配对失败（403 除外）但已连上接收端时，再试一次不加密的明文会话。仅当接收端始终卡在配对且确认它只支持明文时打开；下次连接起效。</string>
+    <string name="lay_audio_fallback">兼容兜底：音频格式未声明时仍尝试</string>
+    <string name="lay_audio_fallback_desc">默认关。接收端没有声明可用的媒体音频格式时，仍按默认 PCM 48k 尝试出声。仅当车机能播声音却总是只推视频时打开；可能出现无声或断开，下次连接起效。</string>
+    <string name="lay_duck_level">导航时音乐音量</string>
+    <string name="lay_duck_level_desc">导航或语音提示播报时，音乐临时压低到这个音量，播报结束后再淡回。往右拖压得更低，最左为不压低；默认 -15 dB。连接中调整立即生效。</string>
+    <string name="lay_duck_level_value">%1$d dB</string>
+    <string name="lay_duck_level_off">不压低</string>
+    <string name="lay_stream_resolution">流分辨率</string>
+    <string name="lay_next_connection">保存后下次连接起效</string>
+    <string name="lay_target_fps">目标帧率</string>
+    <string name="lay_target_fps_desc">连接中切换实时生效；英雄卡实时显示「实际/目标」帧率</string>
+    <string name="lay_pick_target">选择目标车机</string>
+    <string name="lay_pick_target_desc">已配对设备可直接选用；点击未配对的设备会发起系统蓝牙配对</string>
+    <string name="lay_paired">已配对</string>
+    <string name="lay_no_paired">暂无已配对设备——请在下方扫描并点击配对</string>
+    <string name="lay_nearby">附近的设备</string>
+    <string name="lay_rescan">重新扫描</string>
+    <string name="lay_passat_return">实验：帕萨特回主界面再进 CarPlay</string>
+    <string name="lay_passat_off">关闭</string>
+    <string name="lay_passat_retry">失败重建</string>
+    <string name="lay_passat_disconnect">失败断开</string>
+    <string name="lay_passat_norebuild">不重建</string>
+    <string name="lay_passat_return_desc">默认关。需先在主页「车型适配」选「大众」才会执行；每次只选一个来试。失败重建：拿回主屏 3 秒内车机无触控也无要帧时，自动重建一次主屏流。失败断开：连续两次无反应就结束本轮，请重新连接。不重建：点图标时不重建主屏流，只重申归属并补参数集。均无实车证据，下次点图标起效。</string>
+    <string name="sf_passat_off">已关闭帕萨特实验策略</string>
+    <string name="sf_passat_retry">已选：失败后重建一次</string>
+    <string name="sf_passat_disconnect">已选：连续失败后断开</string>
+    <string name="sf_passat_norebuild">已选：点图标不重建主屏流</string>
+</resources>

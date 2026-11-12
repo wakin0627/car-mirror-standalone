@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sf_screen_off_on">On: the panel turns off while connected</string>
+    <string name="sf_screen_off_off">Off: only dimming while connected</string>
+    <string name="sf_auto_connect_on">On: connect automatically in the car</string>
+    <string name="sf_auto_connect_off">Off: no automatic start in the car</string>
+    <string name="sf_hid_on">Raw HID log on (turn it off after calibrating)</string>
+    <string name="sf_hid_off">Raw HID log off</string>
+    <string name="sf_plain_on">On: try unencrypted after pairing fails (applies on the next connection)</string>
+    <string name="sf_plain_off">Off: no unencrypted retry after pairing fails</string>
+    <string name="sf_audio_fallback_on">On: try audio when no format is declared (applies on the next connection)</string>
+    <string name="sf_audio_fallback_off">Off: video only when no audio format is declared</string>
+    <string name="sf_scale_running">Applies on the next connection; the current one runs at %1$d%%</string>
+    <string name="sf_scale_saved">Resolution %1$d%% saved; applies on the next connection</string>
+    <string name="sf_duck_saved">Music lowered to %1$d dB during navigation</string>
+    <string name="sf_duck_off">Music not lowered during navigation</string>
+    <string name="sf_fps_set">Frame rate set to %1$d fps</string>
+    <string name="sf_fps_live">Frame rate set to %1$d fps (applied now)</string>
+</resources>

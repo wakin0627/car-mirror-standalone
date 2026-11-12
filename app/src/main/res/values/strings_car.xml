@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="zh-rCN">
+    <string name="sf_screen_off_on">已开启：连接时物理息屏</string>
+    <string name="sf_screen_off_off">已关闭：连接时只用暗幕</string>
+    <string name="sf_auto_connect_on">已开启：上车自动连接</string>
+    <string name="sf_auto_connect_off">已关闭：上车不再自动启动</string>
+    <string name="sf_hid_on">已开启 HID 原始日志（校准完请关掉）</string>
+    <string name="sf_hid_off">已关闭 HID 原始日志</string>
+    <string name="sf_plain_on">已开启：配对失败后尝试明文（下次连接起效）</string>
+    <string name="sf_plain_off">已关闭：配对失败不再尝试明文</string>
+    <string name="sf_audio_fallback_on">已开启：音频格式未声明时仍尝试（下次连接起效）</string>
+    <string name="sf_audio_fallback_off">已关闭：未声明音频格式时只推视频</string>
+    <string name="sf_scale_running">保存后下次连接起效；当前连接按 %1$d%% 运行</string>
+    <string name="sf_scale_saved">分辨率 %1$d%% 已保存，下次连接起效</string>
+    <string name="sf_duck_saved">导航时音乐压低到 %1$d dB</string>
+    <string name="sf_duck_off">导航时不压低音乐</string>
+    <string name="sf_fps_set">帧率已切换为 %1$dfps</string>
+    <string name="sf_fps_live">帧率已切换为 %1$dfps（实时生效）</string>
+</resources>

@@ -1,0 +1,329 @@
+package com.mcarplay.app.browser;
+
+import android.content.Context;
+import android.util.Base64;
+import android.util.Log;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
+import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.Locale;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLServerSocket;
+
+final class MirrorWebServer {
+    interface Listener { void onTouch(byte[] data); String onCommand(String action); }
+    private static final String TAG = "CarMirrorWeb";
+    private static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    private final Context context;
+    private final Listener listener;
+    private final String token;
+    private final String pin;
+    private final Map<String, long[]> failedPins = new ConcurrentHashMap<>();
+    private final Set<Client> clients = ConcurrentHashMap.newKeySet();
+    private SSLServerSocket server;
+    private ServerSocket diagnosticServer;
+    private Thread acceptThread;
+    private volatile boolean running;
+    private volatile byte[] configPacket;
+    private volatile byte[] lastKeyframe;
+
+    MirrorWebServer(Context context, Listener listener, String token, String pin) {
+        this.context = context; this.listener = listener; this.token = token; this.pin = pin;
+    }
+
+    void start() throws Exception {
+        SSLContext tls = createTlsContext();
+        server = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(8443, 32);
+        running = true;
+        try {
+            diagnosticServer = new ServerSocket(8080, 8);
+            new Thread(() -> {
+                while (running) {
+                    try { serveDiagnostic(diagnosticServer.accept()); }
+                    catch (Exception e) { if (running) Log.w(TAG, "Diagnostic accept failed", e); }
+                }
+            }, "car-mirror-diagnostic").start();
+        } catch (Exception e) { Log.w(TAG, "Diagnostic port unavailable", e); }
+        acceptThread = new Thread(() -> {
+            while (running) {
+                try { serve(server.accept()); }
+                catch (Exception e) { if (running) Log.e(TAG, "Accept failed", e); }
+            }
+        }, "car-mirror-accept");
+        acceptThread.start();
+    }
+
+    void stop() {
+        running = false;
+        try { if (server != null) server.close(); } catch (Exception ignored) {}
+        try { if (diagnosticServer != null) diagnosticServer.close(); } catch (Exception ignored) {}
+        for (Client client : clients) client.close();
+        clients.clear();
+    }
+
+    void broadcastVideo(byte[] packet, boolean config, boolean key) {
+        if (config) configPacket = packet;
+        if (key) lastKeyframe = packet;
+        for (Client client : clients) if (!client.audio) client.offerVideo(packet, config, key);
+    }
+    void broadcastAudio(byte[] packet) {
+        for (Client client : clients) if (client.audio) client.offerAudio(packet);
+    }
+    void notifyAudioError() {
+        for (Client client : clients) if (client.audio) client.sendText("{\"error\":\"capture_failed\"}");
+    }
+
+    private SSLContext createTlsContext() throws Exception {
+        TlsIdentity identity = TlsIdentity.loadOrCreate(context.getFilesDir());
+        SSLContext tls = SSLContext.getInstance("TLS");
+        tls.init(new KeyManager[]{identity.keyManager()}, null, null);
+        return tls;
+    }
+
+    private void serveDiagnostic(Socket socket) {
+        new Thread(() -> {
+            try (Socket client = socket) {
+                client.setSoTimeout(3000);
+                String first = readLine(client.getInputStream());
+                if (first == null || !first.startsWith("GET ")) return;
+                String host = client.getLocalAddress().getHostAddress();
+                String body = "CarWith browser bridge is reachable. Open https://" + host + ":8443/ for video.\n";
+                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+                String response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
+                        + bytes.length + "\r\nConnection: close\r\n\r\n";
+                OutputStream out = client.getOutputStream();
+                out.write(response.getBytes(StandardCharsets.US_ASCII));
+                out.write(bytes);
+                out.flush();
+            } catch (Exception e) { Log.w(TAG, "Diagnostic request failed", e); }
+        }, "car-mirror-diagnostic-client").start();
+    }
+
+    private void serve(Socket socket) {
+        new Thread(() -> {
+            try {
+                socket.setSoTimeout(15000);
+                InputStream in = new BufferedInputStream(socket.getInputStream());
+                OutputStream out = new BufferedOutputStream(socket.getOutputStream());
+                String first = readLine(in);
+                if (first == null || !first.startsWith("GET ")) { socket.close(); return; }
+                String target = first.split(" ")[1];
+                String[] parts = target.split("\\?", 2);
+                String path = parts[0];
+                if ("/".equals(path) && (parts.length == 1 || parts[1].startsWith("pin="))) {
+                    if (parts.length == 1) {
+                        servePair(out, "");
+                    } else if (pinRateLimited(socket.getInetAddress().getHostAddress(), false)) {
+                        servePair(out, "尝试次数过多，请稍后再试");
+                    } else if (("pin=" + pin).equals(parts[1])) {
+                        out.write(("HTTP/1.1 302 Found\r\nLocation: /?key=" + token
+                                + "\r\nCache-Control: no-store\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                                .getBytes(StandardCharsets.US_ASCII));
+                    } else {
+                        String remote = socket.getInetAddress().getHostAddress();
+                        pinRateLimited(remote, true);
+                        servePair(out, "配对码不正确，请重试");
+                    }
+                    out.flush(); socket.close(); return;
+                }
+                if (parts.length != 2 || !("key=" + token).equals(parts[1])) {
+                    out.write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            .getBytes(StandardCharsets.US_ASCII));
+                    out.flush(); socket.close(); return;
+                }
+                Map<String,String> headers = new HashMap<>();
+                String line;
+                while ((line = readLine(in)) != null && !line.isEmpty()) {
+                    int colon = line.indexOf(':');
+                    if (colon > 0) headers.put(line.substring(0, colon).trim().toLowerCase(Locale.ROOT), line.substring(colon + 1).trim());
+                }
+                if ("websocket".equalsIgnoreCase(headers.get("upgrade")) && (path.equals("/stream") || path.equals("/audio"))) {
+                    String key = headers.get("sec-websocket-key");
+                    if (key == null) { socket.close(); return; }
+                    byte[] hash = MessageDigest.getInstance("SHA-1").digest((key + GUID).getBytes(StandardCharsets.US_ASCII));
+                    String response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
+                            + Base64.encodeToString(hash, Base64.NO_WRAP) + "\r\n\r\n";
+                    out.write(response.getBytes(StandardCharsets.US_ASCII)); out.flush();
+                    socket.setSoTimeout(0);
+                    Client client = new Client(socket, in, out, path.equals("/audio"));
+                    clients.add(client);
+                    if (!client.audio) {
+                        BrowserBridgeService.browserConnected = true;
+                        BrowserBridgeService.state = BrowserBridgeService.videoReady ? "车机已连接" : "车机网页已连接，等待 CarWith 画面";
+                        if (configPacket != null) client.offerVideo(configPacket, true, false);
+                        if (lastKeyframe != null) client.offerVideo(lastKeyframe, false, true);
+                    }
+                    client.run();
+                    return;
+                }
+                String asset = path.equals("/audio-worklet.js") ? "browser-audio-worklet.js" : "browser-index.html";
+                byte[] body = readAsset(asset);
+                String type = asset.endsWith(".js") ? "application/javascript" : "text/html";
+                String response = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
+                out.write(response.getBytes(StandardCharsets.US_ASCII)); out.write(body); out.flush(); socket.close();
+            } catch (Exception e) {
+                if (e instanceof SSLException) {
+                    Log.w(TAG, "TLS request rejected from " + socket.getRemoteSocketAddress(), e);
+                    if (running && !hasVideoClient())
+                        BrowserBridgeService.state = "等待车机连接；最近一次请求 TLS 失败：" + e.getMessage();
+                } else {
+                    Log.w(TAG, "Client disconnected: " + e.getMessage());
+                }
+                try { socket.close(); } catch (Exception ignored) {}
+            }
+        }, "car-mirror-http").start();
+    }
+
+    private boolean pinRateLimited(String remote, boolean failedAttempt) {
+        synchronized (failedPins) {
+            long now = System.currentTimeMillis();
+            long[] count = failedPins.computeIfAbsent(remote, key -> new long[]{now, 0});
+            if (now - count[0] > 60_000) { count[0] = now; count[1] = 0; }
+            if (failedAttempt) count[1]++;
+            return count[1] >= 5;
+        }
+    }
+
+    private void servePair(OutputStream out, String error) throws Exception {
+        String html = new String(readAsset("browser-pair.html"), StandardCharsets.UTF_8)
+                .replace("{{ERROR}}", error);
+        byte[] body = html.getBytes(StandardCharsets.UTF_8);
+        String response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
+                + body.length + "\r\nConnection: close\r\n\r\n";
+        out.write(response.getBytes(StandardCharsets.US_ASCII));
+        out.write(body);
+    }
+
+    private boolean hasVideoClient() {
+        for (Client client : clients) if (!client.audio && client.open) return true;
+        return false;
+    }
+
+    private byte[] readAsset(String name) throws Exception {
+        try (InputStream in = context.getAssets().open(name); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] b = new byte[8192]; int n;
+            while ((n = in.read(b)) >= 0) out.write(b, 0, n);
+            return out.toByteArray();
+        }
+    }
+    private static String readLine(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(); int c;
+        while ((c = in.read()) >= 0) {
+            if (c == '\n') break;
+            if (out.size() >= 8192) throw new IllegalArgumentException("Request line too long");
+            out.write(c);
+        }
+        if (c < 0 && out.size() == 0) return null;
+        byte[] bytes = out.toByteArray();
+        int n = bytes.length;
+        if (n > 0 && bytes[n - 1] == '\r') n--;
+        return new String(bytes, 0, n, StandardCharsets.US_ASCII);
+    }
+    private static byte[] exact(InputStream in, int len) throws Exception {
+        byte[] b = new byte[len]; int off = 0;
+        while (off < len) { int n = in.read(b, off, len - off); if (n < 0) throw new IllegalStateException("Socket closed"); off += n; }
+        return b;
+    }
+
+    private final class Client {
+        final Socket socket;
+        final InputStream in;
+        final OutputStream out;
+        final boolean audio;
+        final ArrayBlockingQueue<byte[]> queue;
+        volatile boolean open = true;
+        volatile boolean dropping;
+        Thread writer;
+        Client(Socket socket, InputStream in, OutputStream out, boolean audio) {
+            this.socket = socket; this.in = in; this.out = out; this.audio = audio;
+            this.queue = new ArrayBlockingQueue<>(audio ? 16 : 6);
+        }
+        void offerVideo(byte[] packet, boolean config, boolean key) {
+            if (key) dropping = false;
+            if (config && dropping) return;
+            if (dropping) return;
+            if (!queue.offer(frame((byte) 2, packet))) {
+                queue.clear(); dropping = !key;
+                if (key) {
+                    if (configPacket != null) queue.offer(frame((byte) 2, configPacket));
+                    queue.offer(frame((byte) 2, packet));
+                }
+            }
+        }
+        void offerAudio(byte[] packet) {
+            byte[] encoded = frame((byte) 2, packet);
+            while (queue.size() >= 8) queue.poll();
+            if (!queue.offer(encoded)) { queue.poll(); queue.offer(encoded); }
+        }
+        void sendText(String message) { queue.offer(frame((byte) 1, message.getBytes(StandardCharsets.UTF_8))); }
+        void run() {
+            writer = new Thread(() -> {
+                try {
+                    while (open) { byte[] data = queue.take(); synchronized (out) { out.write(data); out.flush(); } }
+                } catch (Exception ignored) { close(); }
+            }, "car-mirror-ws-writer");
+            writer.start();
+            try {
+                while (open) {
+                    byte[] head = exact(in, 2);
+                    int opcode = head[0] & 15;
+                    long length = head[1] & 127;
+                    if (length == 126) { byte[] n = exact(in, 2); length = ((n[0] & 255) << 8) | (n[1] & 255); }
+                    else if (length == 127) { byte[] n = exact(in, 8); length = 0; for (byte x : n) length = (length << 8) | (x & 255); }
+                    if (length > 65536) throw new IllegalArgumentException("Frame too long");
+                    boolean masked = (head[1] & 128) != 0;
+                    if (!masked) throw new IllegalArgumentException("Unmasked client frame");
+                    byte[] mask = exact(in, 4), payload = exact(in, (int) length);
+                    for (int i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
+                    if (opcode == 8) break;
+                    if (opcode == 9) { queue.offer(frame((byte) 10, payload)); continue; }
+                    if (audio) continue;
+                    if (opcode == 2) listener.onTouch(payload);
+                    if (opcode == 1) {
+                        String text = new String(payload, StandardCharsets.UTF_8);
+                        String action = text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("getDisplayState") ? "getDisplayState" :
+                                text.contains("displayOff") ? "displayOff" : text.contains("displayOn") ? "displayOn" : "";
+                        String response = listener.onCommand(action);
+                        if (response != null) sendText(response);
+                    }
+                }
+            } catch (Exception ignored) { }
+            close();
+        }
+        void close() {
+            if (!open) return;
+            open = false; clients.remove(this);
+            if (!audio && running && !hasVideoClient()) {
+                BrowserBridgeService.browserConnected = false;
+                BrowserBridgeService.state = BrowserBridgeService.videoReady
+                        ? "CarWith 画面已接收，等待车机浏览器" : "等待 CarWith 画面";
+            }
+            if (writer != null) writer.interrupt();
+            try { socket.close(); } catch (Exception ignored) {}
+        }
+    }
+    private static byte[] frame(byte opcode, byte[] payload) {
+        int size = payload.length;
+        int header = size < 126 ? 2 : size <= 65535 ? 4 : 10;
+        byte[] b = new byte[header + size]; b[0] = (byte)(0x80 | opcode);
+        if (header == 2) b[1] = (byte) size;
+        else if (header == 4) { b[1] = 126; b[2] = (byte)(size >> 8); b[3] = (byte) size; }
+        else { b[1] = 127; long n = size; for (int i = 9; i >= 2; i--) { b[i] = (byte)n; n >>>= 8; } }
+        System.arraycopy(payload, 0, b, header, size);
+        return b;
+    }
+}
