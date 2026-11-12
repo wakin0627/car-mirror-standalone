@@ -50,7 +50,7 @@ class BrowserBridgeActivity : Activity() {
         address = label("", 18, Color.BLACK).also(root::addView)
         pin = label("配对码：${BrowserBridgeService.pin}", 20, Color.rgb(38, 90, 160)).also(root::addView)
         root.addView(label("画质", 16, Color.DKGRAY))
-        quality = spinner("低延迟：宽 1280", "标准：宽 1920").also(root::addView)
+        quality = spinner("低延迟：宽 1280", "标准：宽 1920", "萤火虫原屏：2560×1600（16:10）").also(root::addView)
         root.addView(label("车机比例", 16, Color.DKGRAY))
         ratio = spinner("16:10", "16:9", "2:1").also(root::addView)
         button(root, "连接，显示 CarWith 画面") {
@@ -59,8 +59,9 @@ class BrowserBridgeActivity : Activity() {
                 return@button
             }
             val service = Intent(this, BrowserBridgeService::class.java).setAction(BrowserBridgeService.ACTION_START)
-            service.putExtra("width", if (quality.selectedItemPosition == 0) 1280 else 1920)
-            service.putExtra("ratio", ratio.selectedItemPosition)
+            val selectedQuality = quality.selectedItemPosition
+            service.putExtra("width", when (selectedQuality) { 0 -> 1280; 1 -> 1920; else -> 2560 })
+            service.putExtra("ratio", if (selectedQuality == 2) 0 else ratio.selectedItemPosition)
             startForegroundService(service)
             status.text = "正在启动"
         }
@@ -72,6 +73,9 @@ class BrowserBridgeActivity : Activity() {
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("CarWith 网页桥接", url))
             }
+        }
+        button(root, "设置后台运行权限") {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
         root.addView(label("车机浏览器打开网址，输入上方六位配对码，再点“开启车机声音”。车机画面由 CarWith 生成，手机屏幕可独立使用。首次打开本地 HTTPS 证书可能需要在车机确认。", 14, Color.GRAY))
         setContentView(ScrollView(this).apply { addView(root) })

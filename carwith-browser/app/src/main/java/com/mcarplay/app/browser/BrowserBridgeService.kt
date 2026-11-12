@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.os.PowerManager
+import android.net.wifi.WifiManager
 import android.util.Log
 import com.mcarplay.app.audio.AudioDuckingMixer
 import com.mcarplay.app.audio.PcmResampler
@@ -49,6 +50,7 @@ class BrowserBridgeService :
     @Volatile
     private var session: CarLifeSession? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     @Volatile
     private var stopping = false
@@ -104,6 +106,8 @@ class BrowserBridgeService :
             if (stopping) return
             val power = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CarWithBrowser:bridge").also { it.acquire() }
+            val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "CarWithBrowser:wifi").also { it.acquire() }
             val client =
                 CarLifeSession(
                     application = application,
@@ -115,6 +119,7 @@ class BrowserBridgeService :
                     },
                     log = { message -> Log.i("CarWithBrowser", message) },
                     requestedVideoSize = width to height,
+                    requestedFps = 60,
                 )
             session = client
             if (stopping) return
@@ -242,6 +247,8 @@ class BrowserBridgeService :
         web = null
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
+        wifiLock?.takeIf { it.isHeld }?.release()
+        wifiLock = null
         synchronized(audioLock) {
             resamplers.clear()
             mixer.reset()

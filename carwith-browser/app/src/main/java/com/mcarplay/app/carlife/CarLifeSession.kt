@@ -30,6 +30,7 @@ class CarLifeSession(
     private val launchStrategy: CarLifeLaunchStrategy = CarLifeLaunchStrategy.COMPATIBLE,
     /** 向 CarWith 请求的编码尺寸；null 时沿用协议默认值。CarWith 可能不采纳。 */
     private val requestedVideoSize: Pair<Int, Int>? = null,
+    private val requestedFps: Int = CarLifeProtocol.DEFAULT_FPS,
     private val isAppInForeground: () -> Boolean = CarLifeLauncher::isAppInForeground,
     private val connectorFactory: (String, (Int) -> Socket) -> CarLifeChannelConnector =
         { _, connect ->
@@ -398,7 +399,7 @@ class CarLifeSession(
             log("CARLIFE: AES 已就绪，请求视频初始化")
             val (width, height) = requestedVideoSize ?: (CarLifeProtocol.DEFAULT_WIDTH to CarLifeProtocol.DEFAULT_HEIGHT)
             log("CARLIFE: 请求编码尺寸 ${width}x$height（以 VIDEO_INIT_DONE 返回为准）")
-            stateMachine.requestVideoInit(width, height).forEach(::sendAction)
+            stateMachine.requestVideoInit(width, height, requestedFps).forEach(::sendAction)
             startHeartbeat()
         }
         if (frame.kind == CarLifeProtocol.VIDEO_ENCODER_INIT_DONE &&

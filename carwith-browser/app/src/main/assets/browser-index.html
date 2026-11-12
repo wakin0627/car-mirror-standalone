@@ -139,10 +139,6 @@ function initDecoder() {
   decoder = new VideoDecoder({
     output(frame) {
       // Only drop frames when queue exceeds 1 to balance 20ms latency with micro-jitter tolerance
-      if (decoder.decodeQueueSize > 1) {
-        frame.close();
-        return;
-      }
       const fw = frame.displayWidth;
       const fh = frame.displayHeight;
       videoWidth = fw;
