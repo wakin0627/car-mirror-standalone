@@ -25,11 +25,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class MirrorService extends Service implements MirrorWebServer.Listener {
     static final String ACTION_START = "com.niofirefly.standalone.START";
     static final String ACTION_STOP = "com.niofirefly.standalone.STOP";
     static volatile String state = "未连接";
+    static volatile boolean active;
     private static final String TAG = "CarMirrorService";
     private static final String SOCKET = "scrcpy_01234567";
     private static final String ROOT_DIR = "/data/local/tmp/niofirefly-standalone";
@@ -43,6 +46,8 @@ public final class MirrorService extends Service implements MirrorWebServer.List
     private ConnectivityManager.NetworkCallback wifiCallback;
     private File rootScript;
     private volatile boolean dimmed;
+    private volatile int carDisplayId = -1;
+    private volatile boolean virtualMode;
 
     @Override public IBinder onBind(Intent intent) { return null; }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -52,6 +57,7 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         }
         if (starting || web != null) return START_STICKY;
         starting = true;
+        active = true;
         state = "正在启动";
         showNotification();
         new Thread(() -> {
@@ -88,12 +94,15 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         String orientation = intent == null ? "@270" : intent.getStringExtra("orientation");
         if (!"@90".equals(orientation)) orientation = "@270";
         boolean tabletMode = intent != null && intent.getBooleanExtra("tabletMode", false);
+        virtualMode = intent == null || intent.getBooleanExtra("virtualMode", true);
+        int ratio = intent == null ? 0 : intent.getIntExtra("carRatio", 0);
+        int virtualHeight = ratio == 1 ? maxSize * 9 / 16 : ratio == 2 ? maxSize / 2 : maxSize * 5 / 8;
         rootScript = copyAsset("root-setup.sh");
         File jar = copyAsset("scrcpy-server.jar");
         root("sh " + rootScript.getAbsolutePath() + " install " + jar.getAbsolutePath());
         ensureActive();
         root("sh " + rootScript.getAbsolutePath() + " start " + size + " 320 " + android.os.Process.myPid()
-                + (tabletMode ? " 1" : " 0"));
+                + (tabletMode ? " 1" : " 0") + (virtualMode ? " 1" : " 0"));
         ensureActive();
         web = new MirrorWebServer(this, this);
         web.start();
@@ -111,7 +120,8 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         wakeLock.acquire();
         String command = "su shell -c 'CLASSPATH=" + ROOT_DIR + "/scrcpy-server.jar /system/bin/app_process "
                 + "/system/bin com.genymobile.scrcpy.Server 3.1 log_level=info scid=01234567 "
-                + "max_size=" + maxSize + " capture_orientation=" + orientation
+                + (virtualMode ? "new_display=" + maxSize + "x" + virtualHeight + "/240 vd_system_decorations=false" :
+                        "max_size=" + maxSize + " capture_orientation=" + orientation)
                 + " video_bit_rate=" + bitRate + " max_fps=30 "
                 + "audio=true audio_source=output audio_codec=raw control=true cleanup=false "
                 + "tunnel_forward=true send_device_meta=false send_codec_meta=false "
@@ -122,7 +132,19 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         new Thread(() -> {
             try (InputStream log = captureProcess.getInputStream()) {
                 byte[] b = new byte[2048]; int n;
-                while ((n = log.read(b)) >= 0) Log.i(TAG, new String(b, 0, n, StandardCharsets.UTF_8));
+                StringBuilder lines = new StringBuilder();
+                Pattern displayPattern = Pattern.compile("New display: .*?\\(id=(\\d+)\\)");
+                while ((n = log.read(b)) >= 0) {
+                    String chunk = new String(b, 0, n, StandardCharsets.UTF_8);
+                    Log.i(TAG, chunk);
+                    lines.append(chunk);
+                    Matcher match = displayPattern.matcher(lines);
+                    if (virtualMode && carDisplayId < 0 && match.find()) {
+                        carDisplayId = Integer.parseInt(match.group(1));
+                        launchCarLauncher();
+                    }
+                    if (lines.length() > 4096) lines.delete(0, lines.length() - 2048);
+                }
             } catch (Exception ignored) {}
             if (!stopping) {
                 state = "采集进程已退出";
@@ -212,6 +234,7 @@ public final class MirrorService extends Service implements MirrorWebServer.List
 
     @Override public String onCommand(String action) {
         if ("disconnect".equals(action)) { stopSelf(); return null; }
+        if ("launcher".equals(action)) { launchCarLauncher(); return null; }
         if ("displayOff".equals(action) || "displayOn".equals(action)) {
             try {
                 root("sh " + rootScript.getAbsolutePath() + ("displayOff".equals(action) ? " dim" : " wake"));
@@ -230,6 +253,14 @@ public final class MirrorService extends Service implements MirrorWebServer.List
             while ((n = in.read(b)) >= 0) out.write(b, 0, n);
         }
         return target;
+    }
+    private void launchCarLauncher() {
+        int id = carDisplayId;
+        if (id < 0 || stopping) return;
+        new Thread(() -> {
+            try { root("am start --display " + id + " -n " + getPackageName() + "/.CarLauncherActivity"); }
+            catch (Exception e) { Log.e(TAG, "Car launcher failed", e); state = "车机应用列表启动失败：" + e.getMessage(); }
+        }, "car-mirror-launcher").start();
     }
     private void root(String command) throws Exception {
         Process p = new ProcessBuilder("su", "-c", command).redirectErrorStream(true).start();
@@ -252,12 +283,14 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         videoSocket = null; audioSocket = null; controlSocket = null;
         if (scrcpy != null) scrcpy.destroy();
         scrcpy = null;
+        carDisplayId = -1;
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         wakeLock = null;
         if (rootScript != null) try { root("sh " + rootScript.getAbsolutePath() + " stop"); } catch (Exception e) { Log.e(TAG, "Restore failed", e); }
     }
     @Override public void onDestroy() {
         stopping = true;
+        active = false;
         cleanupResources();
         if (!state.startsWith("启动失败") && !state.startsWith("Wi-Fi") && !state.endsWith("中断") && !state.equals("采集进程已退出")) state = "已断开";
         super.onDestroy();

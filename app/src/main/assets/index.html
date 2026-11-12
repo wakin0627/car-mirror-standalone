@@ -14,7 +14,8 @@
   #fullscreenBtn { top:12px; }
   #screenBtn { top:58px; }
   #fitBtn { top:150px; }
-  #disconnectBtn { top:196px; }
+  #launcherBtn { top:196px; }
+  #disconnectBtn { top:242px; }
   #audioBtn { top:104px; }
   #videoInfo { position:fixed; z-index:10000; left:8px; bottom:8px; padding:4px 7px; border-radius:5px; background:#111a; color:#fff; font:12px sans-serif; pointer-events:none; }
 </style>
@@ -24,6 +25,7 @@
 <button class="topButton" id="screenBtn" type="button">调暗手机屏幕</button>
 <button class="topButton" id="audioBtn" type="button">开启车机声音</button>
 <button class="topButton" id="fitBtn" type="button">铺满屏幕（裁边）</button>
+<button class="topButton" id="launcherBtn" type="button">应用列表</button>
 <button class="topButton" id="disconnectBtn" type="button">断开投屏</button>
 <canvas id="v"></canvas>
 <div id="videoInfo">等待画面</div>
@@ -35,6 +37,10 @@ const audioBtn = document.getElementById('audioBtn');
 const fitBtn = document.getElementById('fitBtn');
 const videoInfo = document.getElementById('videoInfo');
 const disconnectBtn = document.getElementById('disconnectBtn');
+const launcherBtn = document.getElementById('launcherBtn');
+launcherBtn.addEventListener('pointerdown', e => e.stopPropagation(), { passive:true });
+launcherBtn.addEventListener('pointerup', e => e.stopPropagation(), { passive:true });
+launcherBtn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action:'launcher' })); });
 let fillMode = false;
 fitBtn.addEventListener('pointerdown', e => e.stopPropagation(), { passive:true });
 fitBtn.addEventListener('pointerup', e => e.stopPropagation(), { passive:true });

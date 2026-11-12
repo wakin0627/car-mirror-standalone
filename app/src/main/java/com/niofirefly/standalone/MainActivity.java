@@ -29,9 +29,13 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status;
     private TextView address;
+    private TextView updateStatus;
+    private UpdateManager updates;
     private Spinner quality;
+    private Spinner carRatio;
     private CheckBox flip;
     private CheckBox tabletMode;
+    private CheckBox virtualMode;
     private final Runnable refreshTask = new Runnable() {
         @Override public void run() {
             if (status != null) status.setText(MirrorService.state);
@@ -62,6 +66,8 @@ public final class MainActivity extends Activity {
             start.putExtra("size", size);
             start.putExtra("orientation", flip.isChecked() ? "@90" : "@270");
             start.putExtra("tabletMode", tabletMode.isChecked());
+            start.putExtra("virtualMode", virtualMode.isChecked());
+            start.putExtra("carRatio", carRatio.getSelectedItemPosition());
             startForegroundService(start);
             status.setText("正在启动");
         });
@@ -77,23 +83,43 @@ public final class MainActivity extends Activity {
             }
         });
         button(root, "打开 Wi-Fi 设置", v -> startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
+        button(root, "检查更新", v -> updates.check());
+        updateStatus = label("", 14, Color.rgb(38, 90, 160)); root.addView(updateStatus);
+        updates = new UpdateManager(this, updateStatus);
         root.addView(label("画质", 16, Color.DKGRAY));
         quality = new Spinner(this);
-        String[] modes = {"标准：最长边 1920（推荐）", "低延迟：最长边 1280", "高清：最长边 2560"};
+        String[] modes = {"标准：宽 1920", "低延迟：宽 1280", "高清：宽 2560"};
         ArrayAdapter<String> modesAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         quality.setAdapter(modesAdapter); root.addView(quality);
+        root.addView(label("车机屏幕比例", 16, Color.DKGRAY));
+        carRatio = new Spinner(this);
+        carRatio.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"16:10（推荐）", "16:9", "2:1"}));
+        root.addView(carRatio);
+        virtualMode = new CheckBox(this);
+        virtualMode.setText("车机独立屏幕（16:10，推荐）");
+        virtualMode.setChecked(true);
+        root.addView(virtualMode);
         flip = new CheckBox(this); flip.setText("画面倒置时使用此方向"); root.addView(flip);
         tabletMode = new CheckBox(this);
         tabletMode.setText("强制平板比例（可能导致手机触屏失准）");
         tabletMode.setChecked(false);
         root.addView(tabletMode);
-        root.addView(label("首次连接会请求 Root 授权。车机网页需要点一次“开启车机声音”；断开后会恢复手机原有显示设置。", 14, Color.GRAY));
+        virtualMode.setOnCheckedChangeListener((button, checked) -> {
+            flip.setEnabled(!checked);
+            tabletMode.setEnabled(!checked);
+            carRatio.setEnabled(checked);
+            if (checked) tabletMode.setChecked(false);
+        });
+        flip.setEnabled(false);
+        tabletMode.setEnabled(false);
+        root.addView(label("独立屏幕会在车机上显示应用列表，不改变手机本身的分辨率。车机网页点一次“开启车机声音”。需要镜像手机时可取消独立屏幕。", 14, Color.GRAY));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
         setContentView(scroll);
     }
 
-    @Override protected void onResume() { super.onResume(); handler.post(refreshTask); }
+    @Override protected void onResume() { super.onResume(); handler.post(refreshTask); if (updates != null) updates.onResume(); }
     @Override protected void onPause() { handler.removeCallbacks(refreshTask); super.onPause(); }
     private TextView label(String text, int sp, int color) {
         TextView t = new TextView(this);

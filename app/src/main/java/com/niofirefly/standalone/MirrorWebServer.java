@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
@@ -31,6 +32,7 @@ final class MirrorWebServer {
     private final Listener listener;
     private final Set<Client> clients = ConcurrentHashMap.newKeySet();
     private SSLServerSocket server;
+    private ServerSocket diagnosticServer;
     private Thread acceptThread;
     private volatile boolean running;
     private volatile byte[] configPacket;
@@ -42,6 +44,15 @@ final class MirrorWebServer {
         SSLContext tls = createTlsContext();
         server = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(8443, 32);
         running = true;
+        try {
+            diagnosticServer = new ServerSocket(8080, 8);
+            new Thread(() -> {
+                while (running) {
+                    try { serveDiagnostic(diagnosticServer.accept()); }
+                    catch (Exception e) { if (running) Log.w(TAG, "Diagnostic accept failed", e); }
+                }
+            }, "car-mirror-diagnostic").start();
+        } catch (Exception e) { Log.w(TAG, "Diagnostic port unavailable", e); }
         acceptThread = new Thread(() -> {
             while (running) {
                 try { serve(server.accept()); }
@@ -54,6 +65,7 @@ final class MirrorWebServer {
     void stop() {
         running = false;
         try { if (server != null) server.close(); } catch (Exception ignored) {}
+        try { if (diagnosticServer != null) diagnosticServer.close(); } catch (Exception ignored) {}
         for (Client client : clients) client.close();
         clients.clear();
     }
@@ -75,6 +87,25 @@ final class MirrorWebServer {
         SSLContext tls = SSLContext.getInstance("TLS");
         tls.init(new KeyManager[]{identity.keyManager()}, null, null);
         return tls;
+    }
+
+    private void serveDiagnostic(Socket socket) {
+        new Thread(() -> {
+            try (Socket client = socket) {
+                client.setSoTimeout(3000);
+                String first = readLine(client.getInputStream());
+                if (first == null || !first.startsWith("GET ")) return;
+                String host = client.getLocalAddress().getHostAddress();
+                String body = "CarMirror phone service is reachable. Open https://" + host + ":8443/ for mirroring.\n";
+                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+                String response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
+                        + bytes.length + "\r\nConnection: close\r\n\r\n";
+                OutputStream out = client.getOutputStream();
+                out.write(response.getBytes(StandardCharsets.US_ASCII));
+                out.write(bytes);
+                out.flush();
+            } catch (Exception e) { Log.w(TAG, "Diagnostic request failed", e); }
+        }, "car-mirror-diagnostic-client").start();
     }
 
     private void serve(Socket socket) {
@@ -215,7 +246,7 @@ final class MirrorWebServer {
                     if (opcode == 2) listener.onTouch(payload);
                     if (opcode == 1) {
                         String text = new String(payload, StandardCharsets.UTF_8);
-                        String action = text.contains("disconnect") ? "disconnect" : text.contains("getDisplayState") ? "getDisplayState" :
+                        String action = text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("getDisplayState") ? "getDisplayState" :
                                 text.contains("displayOff") ? "displayOff" : text.contains("displayOn") ? "displayOn" : "";
                         String response = listener.onCommand(action);
                         if (response != null) sendText(response);

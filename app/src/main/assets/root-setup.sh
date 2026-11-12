@@ -39,12 +39,14 @@ case "$1" in
         done
       } > "$STATE"
     fi
-    settings put system accelerometer_rotation 0
-    settings put system user_rotation 1
-    settings put system screen_off_timeout 2147483647
-    if [ "$5" = 1 ]; then
-      wm size "$2"
-      wm density "$3"
+    if [ "$6" != 1 ]; then
+      settings put system accelerometer_rotation 0
+      settings put system user_rotation 1
+      settings put system screen_off_timeout 2147483647
+      if [ "$5" = 1 ]; then
+        wm size "$2"
+        wm density "$3"
+      fi
     fi
     if [ -n "$4" ]; then
       (sh "$BASE/root-setup.sh" watch "$4") </dev/null >/dev/null 2>&1 &
