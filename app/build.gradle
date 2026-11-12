@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.niofirefly.standalone'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.niofirefly.standalone'
+        minSdk 30
+        targetSdk 33
+        versionCode 1
+        versionName '0.1'
+    }
+}
