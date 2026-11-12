@@ -79,7 +79,7 @@ public final class MainActivity extends Activity {
         button(root, "打开 Wi-Fi 设置", v -> startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         root.addView(label("画质", 16, Color.DKGRAY));
         quality = new Spinner(this);
-        String[] modes = {"标准 1920×1200（推荐）", "流畅 1280×800", "高清 2560×1600"};
+        String[] modes = {"标准：最长边 1920（推荐）", "低延迟：最长边 1280", "高清：最长边 2560"};
         ArrayAdapter<String> modesAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         quality.setAdapter(modesAdapter); root.addView(quality);
         flip = new CheckBox(this); flip.setText("画面倒置时使用此方向"); root.addView(flip);

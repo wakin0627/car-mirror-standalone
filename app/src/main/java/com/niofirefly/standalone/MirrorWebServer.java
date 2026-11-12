@@ -158,21 +158,23 @@ final class MirrorWebServer {
         final InputStream in;
         final OutputStream out;
         final boolean audio;
-        final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(32);
+        final ArrayBlockingQueue<byte[]> queue;
         volatile boolean open = true;
         volatile boolean dropping;
         Thread writer;
         Client(Socket socket, InputStream in, OutputStream out, boolean audio) {
             this.socket = socket; this.in = in; this.out = out; this.audio = audio;
+            this.queue = new ArrayBlockingQueue<>(audio ? 16 : 6);
         }
         void offerVideo(byte[] packet, boolean config, boolean key) {
-            if (config || key) dropping = false;
+            if (key) dropping = false;
+            if (config && dropping) return;
             if (dropping) return;
             if (!queue.offer(frame((byte) 2, packet))) {
-                queue.clear(); dropping = !key && !config;
-                if (!dropping) {
+                queue.clear(); dropping = !key;
+                if (key) {
                     if (configPacket != null) queue.offer(frame((byte) 2, configPacket));
-                    if (key && !config) queue.offer(frame((byte) 2, packet));
+                    queue.offer(frame((byte) 2, packet));
                 }
             }
         }

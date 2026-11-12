@@ -84,6 +84,7 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         String size = intent == null ? "1200x1920" : intent.getStringExtra("size");
         if (!"1200x1920".equals(size) && !"800x1280".equals(size) && !"1600x2560".equals(size)) size = "1200x1920";
         int maxSize = size.equals("800x1280") ? 1280 : size.equals("1600x2560") ? 2560 : 1920;
+        int bitRate = maxSize == 1280 ? 3_000_000 : maxSize == 2560 ? 8_000_000 : 5_000_000;
         String orientation = intent == null ? "@270" : intent.getStringExtra("orientation");
         if (!"@90".equals(orientation)) orientation = "@270";
         boolean tabletMode = intent != null && intent.getBooleanExtra("tabletMode", false);
@@ -110,7 +111,8 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         wakeLock.acquire();
         String command = "su shell -c 'CLASSPATH=" + ROOT_DIR + "/scrcpy-server.jar /system/bin/app_process "
                 + "/system/bin com.genymobile.scrcpy.Server 3.1 log_level=info scid=01234567 "
-                + "max_size=" + maxSize + " capture_orientation=" + orientation + " video_bit_rate=8000000 max_fps=60 "
+                + "max_size=" + maxSize + " capture_orientation=" + orientation
+                + " video_bit_rate=" + bitRate + " max_fps=30 "
                 + "audio=true audio_source=output audio_codec=raw control=true cleanup=false "
                 + "tunnel_forward=true send_device_meta=false send_codec_meta=false "
                 + "send_dummy_byte=false send_frame_meta=true'";
