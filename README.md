@@ -1,5 +1,11 @@
 # 车机投屏独立版（Root Android）
 
+## 小米 13 CarWith 网页桥接测试版
+
+小米 13 / HyperOS 4 可试用 [CarWithBrowser-0.1.1-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/carwith-v0.1.1-test/CarWithBrowser-0.1.1-test.apk)。它通过手机本机的 CarWith/小米 CarLife 通道取得车载界面，再经同一 Wi-Fi 的 HTTPS 网页送到车机；手机屏幕可独立操作。车机浏览器打开 App 显示的网址，输入六位配对码即可连接。源码与验证边界见 [carwith-browser/BROWSER_BRIDGE.md](carwith-browser/BROWSER_BRIDGE.md)。此测试版尚未在小米 13 和真实车机上验证；它使用独立包名，可与下方原有投屏 App 共存。代码源于 [mcarplay](https://github.com/wangxso/mcarplay) 的 MIT 许可实现，保留其许可与署名。
+
+## 原有屏幕镜像版
+
 Android App 内置 scrcpy 3.1 服务端、HTTPS 网页、视频转发、触控反控与系统音频转发。目标是手机安装 APK 后直接操作，无需在手机安装 Termux、Node.js，也无需每次通过电脑运行 ADB 命令。
 
 ## 下载

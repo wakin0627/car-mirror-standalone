@@ -2,7 +2,7 @@
 
 本分支从 [mcarplay](https://github.com/wangxso/mcarplay) 的 MIT 许可源码派生，保留上游 `LICENSE`、`NOTICE` 和 `THIRD_PARTY_NOTICES.md`。新增浏览器模式：小米 CarWith/小米 CarLife 在手机本机生成车载画面，本 App 接收其七路本地 CarLife 通道，把 H.264 视频、PCM 音频通过 HTTPS/WebSocket 发给同一 Wi-Fi 上的车机浏览器，并把网页单点触控送回 CarWith。没有内置或修改小米、百度 APK。
 
-测试 APK：[CarWithBrowser-0.1.1-test.apk](https://github.com/wakin0627/carwith-browser-bridge/releases/download/v0.1.1-test/CarWithBrowser-0.1.1-test.apk)。SHA-256：`F5431A54908A74DAB7B73015438643C062FA2705433EE46609866988E40E573E`。
+测试 APK：[CarWithBrowser-0.1.1-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/carwith-v0.1.1-test/CarWithBrowser-0.1.1-test.apk)。SHA-256：`F5431A54908A74DAB7B73015438643C062FA2705433EE46609866988E40E573E`。
 
 ## 使用范围
 
@@ -21,3 +21,5 @@
 ## 验证边界
 
 已完成离线编译、上游协议单元测试和 Android lint。尚未在小米 13 / HyperOS 4 或真实车机上验证启动 CarWith、视频尺寸、音频路由、触控及 Wi-Fi 稳定性。若 CarWith 不接受请求的 16:10 比例，实际视频尺寸会在网页左下角显示。浏览器连接网址只限可信的车机 Wi-Fi 使用；配对码和配对后的随机密钥随 App 进程重启而变化。
+
+Windows 构建时请把 `carwith-browser` 目录复制到纯英文路径再执行 Gradle；Android AIDL 工具在含中文字符的路径下可能无法处理生成文件。
