@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>连接 CarWith 车机画面</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#10151d; color:#fff; font:18px sans-serif; }
+  main { width:min(92vw,460px); padding:28px; border-radius:18px; background:#202935; text-align:center; }
+  h1 { margin:0 0 14px; font-size:27px; }
+  p { margin:0 0 18px; line-height:1.5; }
+  input { width:100%; padding:12px; border:0; border-radius:8px; font-size:28px; text-align:center; letter-spacing:.25em; }
+  button { width:100%; margin-top:14px; padding:14px; border:0; border-radius:8px; background:#469cf8; color:#fff; font-size:20px; }
+  .error { color:#ffb1a7; }
+</style>
+</head>
+<body>
+<main>
+  <h1>连接 CarWith 画面</h1>
+  <p>请输入手机 App 显示的六位配对码</p>
+  <p class="error">{{ERROR}}</p>
+  <form method="get" action="/">
+    <input type="text" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required>
+    <button type="submit">连接车机</button>
+  </form>
+</main>
+</body>
+</html>

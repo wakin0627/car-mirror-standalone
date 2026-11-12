@@ -1,0 +1,386 @@
+# Changelog
+
+Release notes are listed newest first. English is followed by Simplified Chinese.
+Test releases are experimental and do not establish real-vehicle compatibility.
+
+## [v0.1.6] - 2026-11-06
+
+> Stable release collecting the screen-ownership, main-audio arbitration, phone SDP recovery, CarWith entry-diagnostics and an auto-play music switch since v0.1.5-test.3. A user-reported DiPlay + Xiaomi 17 Pro Max run was without issues; that report did not record the build, component versions or which media items were checked. The screen and audio candidates were not tried in a vehicle, WinPlay and macplay regressions are still pending, and a Chery Arrizo 8 re-entry issue is under investigation (see Known issue). This does not establish real-vehicle compatibility.
+> 正式版，汇总 v0.1.5-test.3 以来屏幕归属、主音频仲裁、手机端 SDP 恢复、CarWith 入口诊断与上车自动播放开关的改动。用户反馈小米 17 Pro Max + DiPlay 组合无问题；该反馈未记录构建版本、各组件版本与具体验证项。屏幕与音频两项候选尚未实车验证，WinPlay 与 macplay 的回归仍未进行；艾瑞泽 8 的重新进入问题在排查中（见「已知缺陷」），不代表实车兼容。
+
+### English
+- **Screen video while the head unit owns the main screen:** all frames, including IDRs, are dropped while CarPlay resource arbitration says the main screen belongs to (or is borrowed by) the head unit — the native UI or a reversing camera. The screen socket, CarWith, iAP2, audio and keepAlive stay up. After the screen returns, parameter sets are re-sent and output resumes from a fresh IDR; keyframe requests are retried once per second. `SCREEN_OUTPUT` events and `screenSuspended` in reports separate an intentional pause from a stalled stream. Borrow ownership is tracked explicitly, so a BORROW sent after a permanent TAKE is also bounded by `unborrowConstraint` and `requestUI` cannot steal a reversing camera. The transcode pipeline stops consuming frames while fully paused, and an unreadable ownership callback fails closed.
+- **Main audio arbitration:** before audio SETUP, mcarplay reports `mainAudio` as controller (matching the iPhone ordering) and honors `takeConstraint` / `unborrowConstraint`. If the head unit holds or borrows main audio above user-initiated priority (for example a reversing prompt), no SETUP is sent and no format-failure memory is written; the path retries once after `changeModes` returns the resource. A refused claim is no longer reported as `AUDIO_UNAVAILABLE`, and the retry no longer holds the session lock across SETUP. The connection, dynamic-enable and retry paths share one start+RECORD helper.
+- **Auto-play music switch:** Settings now has "Auto-play music on connect" (on by default). When off, play keys from the car during the first five seconds after CarWith starts are ignored, and music that starts playing on its own within 15 seconds is paused once. Music already playing before the connection is left alone, and later manual play from the car works normally. Recognising self-started playback needs notification access; without it only the key window applies.
+- **Phone SDP lifecycle:** the two iAP2/CarPlay SDP-RFCOMM announcements are managed as a group; if either listener exits, the other is withdrawn, and the pair is re-published from the shared Bluetooth state while the user still wants a connection. User stop, a new round or another Bluetooth-off cancels the restore, which retries at most three times. UUIDs, iAP2/authentication, CHERY/RECORD and media policy are unchanged. HyperOS 3 (API 36) and HyperOS 4 (API 37) emulator runs covered registration, background return and Bluetooth-off recovery; API 33/35 runs were inconclusive.
+- **CarWith entry diagnostics:** entry-stage diagnosis plus a notification probe record why the seven CarLife ports do not appear (entry not created, service not started, connection state reset) without root, and the support report carries the stage and probe result. The Arrizo 8 firmware/protocol report was turned into a regression matrix with synthetic iAP2 and diagnostic-timing tests; no new device acceptance.
+- **Known issue — Arrizo 8 re-entry (reported 2026-11-06):** after the Chery Arrizo 8 head unit leaves CarPlay for its own UI and the user re-enters, audio and steering-wheel controls were reported dead. The attached 0.1.6-debug report ends with the head unit borrowing both the main screen and main audio and then the Wi-Fi/Bluetooth link dropping; it does not cover the re-entry itself. This is under investigation, not reproduced or fixed, and the screen-suspend/audio-arbitration paths remain unconfirmed on this car. The new auto-play switch is also not vehicle-tested.
+- **Validation:** 899 JVM tests and 24 remote bridge tests, plus `spotlessCheck`, `lintStandardDebug` and `assembleStandardDebug`, passed locally; the debug APK reports `0.1.6-debug` (versionCode 1060000). Python and Node tests were not rerun, and no vehicle was used. The user-reported DiPlay + Xiaomi 17 Pro Max run did not record versions or covered media items. The signed tag workflow additionally runs `lintStandardRelease` and `assembleStandardRelease`.
+
+### 简体中文
+- **车机持有主屏时的屏幕视频：** CarPlay 资源仲裁判定主屏归车机或正被车机借用（原车界面、倒车影像）时，丢弃全部视频帧（包括 IDR）；屏幕流 socket、CarWith、iAP2、音频与 keepAlive 保持运行。主屏归还后重发参数集，等到新的 IDR 才恢复输出，关键帧请求每秒重试。报告里的 `SCREEN_OUTPUT` 事件与 `screenSuspended` 字段区分“主动暂停”和“传输停滞”。借用状态单独记录，因此永久 TAKE 之后的 BORROW 同样受 `unborrowConstraint` 约束，`requestUI` 不会抢走倒车画面。转码管线在完全暂停时停止吃帧；归属读取失败时按车机持有处理（fail-closed）。
+- **主音频仲裁：** 音频 SETUP 前先把 `mainAudio` 报归手机（与 iPhone 时序一致），并遵守 `takeConstraint` / `unborrowConstraint`。车机以高于 userInitiated 的约束持有或借用主音频（如倒车提示音）时不发 SETUP，也不写入“格式不兼容”记忆；`changeModes` 归还后再重试一次。claim 被拒不再记为 `AUDIO_UNAVAILABLE`，重试也不再跨 SETUP 持有会话锁；连接、动态补启和重试三条路径共用同一个“启动音频并补 RECORD”的辅助函数。
+- **上车自动播放音乐开关：** 设置新增「上车自动播放音乐」（默认开）。关闭后，CarWith 启动后的前 5 秒忽略车机发来的播放键，15 秒内若有音乐自行开始播放则暂停一次；连接前已在播放的音乐保持不变，之后在车机上手动播放正常。识别自行开始的播放需要通知使用权；未授权时只保留按键拦截窗口。
+- **手机端 SDP 生命周期：** 两项 iAP2/CarPlay SDP-RFCOMM 公告成组管理，任一监听结束即撤销另一项；用户仍请求连接时，根据共享蓝牙状态重新发布。用户停止、新一轮连接或再次关闭蓝牙都会取消恢复，自动恢复最多三次。UUID、iAP2/认证、CHERY/RECORD 与媒体策略未改变。HyperOS 3（API 36）与 HyperOS 4（API 37）模拟器覆盖了注册、后台返回与蓝牙重开恢复；API 33/35 的结果不能算通过。
+- **CarWith 入口诊断：** 新增入口阶段诊断与通知探测，在无 root 的情况下记录七个 CarLife 端口为何没有出现（入口未创建、服务未启动、连接状态被重置），支持报告会带上阶段与探测结果。艾瑞泽 8 的固件/协议报告转为回归矩阵，补充合成 iAP2 与诊断时序测试；没有新的设备验收。
+- **已知缺陷 — 艾瑞泽 8 重新进入 CarPlay（2026-11-06 反馈）：** 奇瑞艾瑞泽 8 车机返回原车界面后重新进入 CarPlay，用户反馈声音与方向盘控制失效。随附的 0.1.6-debug 报告在车机借用主屏与主音频后、Wi-Fi/蓝牙链路断开处结束，没有覆盖重新进入后的时段；问题尚在排查，未复现、未修复，屏幕暂停与主音频仲裁路径也未在该车上确认。新增的上车自动播放开关同样未实车验证。
+- **验证：** 899 项 JVM 测试、24 项 remote 调试桥测试，以及 `spotlessCheck`、`lintStandardDebug`、`assembleStandardDebug` 在本地通过；debug APK 为 `0.1.6-debug`（versionCode 1060000）。未重跑 Python 与 Node 测试，未使用实车。用户反馈的小米 17 Pro Max + DiPlay 组合未记录版本与具体验证项。签名的 tag 工作流还会运行 `lintStandardRelease` 与 `assembleStandardRelease`。
+
+Full changes / 完整变更: [v0.1.5-test.3...v0.1.6](https://github.com/wangxso/mcarplay/compare/v0.1.5-test.3...v0.1.6)
+
+## [v0.1.5-test.3] - 2026-11-05
+
+> Experimental prerelease on top of v0.1.5-test.2: fixes the home-page vehicle profile dialog, which showed no choices in test.2. Everything else in test.2 is unchanged and still has not been tried in a vehicle; DiPlay, WinPlay, macplay and Chery Arrizo 8 regressions are still pending. This does not establish real-vehicle compatibility.
+> 在 v0.1.5-test.2 之上的实验性预发布：修复首页「车型适配」对话框（test.2 里不显示任何选项）。test.2 的其余改动不变，仍未上车验证；DiPlay、WinPlay、macplay、艾瑞泽 8 的回归尚未进行，不代表实车兼容。
+
+### English
+- **Fix:** the home-page "Vehicle profile" dialog (v0.1.5-test.2) showed only its title and the OK button, so no profile could be picked and the Passat experiments, which need the Volkswagen profile, could not be enabled. The hint text now sits in the dialog title and the list of profiles is shown again. Checked on an emulator (HyperOS_3): all seven options appear, choosing Volkswagen updates the home row and is stored.
+- Not covered: the Passat experiment row in Display settings and the strategies' effect at runtime were not exercised (no head unit on the emulator), and nothing here has been tried in a car. The test.2 notes on the manual vehicle profile, the Passat experiments and the CarWith "return to car" handler still apply.
+- Validation: 839 JVM tests and 24 remote bridge tests, plus `spotlessCheck`, `lintStandardDebug` and `assembleStandardDebug`, passed locally. Python and Node tests were not rerun for this entry. The signed tag workflow additionally runs `lintStandardRelease` and `assembleStandardRelease`.
+
+### 简体中文
+- **修复：** 首页「车型适配」对话框（v0.1.5-test.2）只显示标题和「确定」，无法选择车型，需要「大众」车型的帕萨特实验也就无法开启。现在说明文字放在对话框标题里，车型列表重新显示。已在模拟器（HyperOS_3）上检查：七个选项都显示，选「大众」后首页一行更新并已保存。
+- 未覆盖：显示设置里的帕萨特实验一行和各策略的实际效果没有测过（模拟器没有车机），也都没有上车验证。test.2 里关于手动车型适配、帕萨特实验和 CarWith「返回车机」的说明仍然适用。
+- 验证：839 项 JVM 测试、24 项 remote 调试桥测试，以及 `spotlessCheck`、`lintStandardDebug`、`assembleStandardDebug` 在本地通过。本条目未重跑 Python 与 Node 测试。签名的 tag 工作流还会运行 `lintStandardRelease` 和 `assembleStandardRelease`。
+
+Full changes / 完整变更: [v0.1.5-test.2...v0.1.5-test.3](https://github.com/wangxso/mcarplay/compare/v0.1.5-test.2...v0.1.5-test.3)
+
+## [v0.1.5-test.2] - 2026-11-05
+
+> Experimental prerelease on top of v0.1.5-test.1: a manual vehicle profile, three Passat experiment strategies and a first "return to car" handler. None of it has been tried in a vehicle; DiPlay, WinPlay, macplay and Chery Arrizo 8 regressions are still pending. This does not establish real-vehicle compatibility.
+> 在 v0.1.5-test.1 之上的实验性预发布：手动车型适配、三个帕萨特实验策略和首版「返回车机」处理。均未上车验证；DiPlay、WinPlay、macplay、艾瑞泽 8 的回归尚未进行，不代表实车兼容。
+
+### English
+- **Manual vehicle profile:** the home page has a "Vehicle profile" row (Auto by default, Generic, Chery Arrizo 8, Volkswagen, WinPlay, DiPlay, Audi classic MIB3). The choice layers existing registered exceptions on top of the detected policy and shows as `manual.*` tags in the `COMPAT:` log; it applies from the next connection. Manual WinPlay and DiPlay skip the firmware checks of automatic detection. The choice persists, so set it back to Auto when you change receiver.
+- **Passat "return to CarPlay" experiments:** Passat 2025 (`VW4211`) only sometimes re-enters CarPlay after returning to the native UI. Display settings gain a pick-one experiment (off by default) that runs only when the vehicle profile is set to Volkswagen: rebuild the screen stream once if the car shows no touch and asks for no key frame within 3 s; end the session after two such failures in a row; or never rebuild the screen stream on an icon tap. Logs use the `PASSAT:` prefix. The no-reaction check also holds when the user does not touch the screen, so it can misfire, "disconnect on fail" most of all. Try one at a time and record successes per attempts.
+- **CarWith "return to car":** CarLife command `0x10021`, seen about 110 ms after tapping the button in a DiPlay (BYD) report, now hands the main screen and main audio back to the head unit via `modesChanged`; tapping the CarPlay icon can still retake them. The command's meaning is inferred from timing only. Do not treat the button as working until confirmed in a car.
+- Validation: 839 JVM tests and 24 remote bridge tests, plus `spotlessCheck`, `lintStandardDebug` and `assembleStandardDebug`, passed locally. Python and Node tests were not rerun for this entry. The signed tag workflow additionally runs `lintStandardRelease` and `assembleStandardRelease`.
+
+### 简体中文
+- **手动车型适配：** 首页新增「车型适配」一行（默认自动，另有通用、奇瑞艾瑞泽 8、大众、WinPlay、DiPlay、奥迪经典 MIB3）。所选项在自动判定结果上叠加已登记的例外规则，`COMPAT:` 日志里显示为 `manual.*` 标签，下次连接生效。手动选 WinPlay、DiPlay 会跳过自动判定的固件核对。选择会保留，换接收端时请改回自动。
+- **帕萨特「回主界面再进 CarPlay」实验：** 帕萨特 2025（`VW4211`）回原车主界面后再进 CarPlay 只是有概率成功。显示设置新增四选一实验（默认关），仅当车型适配选了「大众」时执行：拿回主屏 3 秒内车机无触控也无要帧则重建一次主屏流；连续两次无反应就结束本轮；或点图标时不重建主屏流。日志前缀 `PASSAT:`。「无反应」判据在用户没碰屏时也成立，可能误判，「失败断开」尤甚。请每次只选一个，记录成功次数/总次数。
+- **CarWith「返回车机」：** DiPlay（比亚迪）报告里点按钮约 110 ms 后出现的 CarLife 命令 `0x10021`，现在会经 `modesChanged` 把主屏和主音频交还车机；之后点 CarPlay 图标仍可拿回。该命令含义仅凭时序推断。上车确认前不要认为按钮已可用。
+- 验证：839 项 JVM 测试、24 项 remote 调试桥测试，以及 `spotlessCheck`、`lintStandardDebug`、`assembleStandardDebug` 在本地通过。本条目未重跑 Python 与 Node 测试。签名的 tag 工作流还会运行 `lintStandardRelease` 和 `assembleStandardRelease`。
+
+Full changes / 完整变更: [v0.1.5-test.1...v0.1.5-test.2](https://github.com/wangxso/mcarplay/compare/v0.1.5-test.1...v0.1.5-test.2)
+
+## [v0.1.5-test.1] - 2026-11-05
+
+> Experimental prerelease collecting the phone UI redesign, layered connection progress and three connection fixes since v0.1.4. Checked only by unit tests, an emulator and one Xiaomi phone; DiPlay, WinPlay, macplay and Chery Arrizo 8 regressions are still pending. This does not establish real-vehicle compatibility.
+> 实验性预发布，汇总 v0.1.4 以来的手机端界面重构、分层连接进度和三项连接修复。只做过单元测试、模拟器和一台小米手机检查；DiPlay、WinPlay、macplay、艾瑞泽 8 的回归尚未进行，不代表实车兼容。
+
+### English
+- **Phone UI redesign:** three tabs (Connect, Settings, Diagnostics), Apple-style tokens that follow the system light/dark mode, a status dot instead of the large car illustration on the home page, and transparent status and gesture bars. The diagnostics hint and export button appear only once a connection record exists.
+- **Removed the CarDeck virtual-display desktop** (Dock, Grid, wallpaper and their settings), which the CarWith path never reached. The car display settings panel stays. HID arrow and knob keys are now only logged, because the CarWith stream carries no arrow keys.
+- **Layered connection progress:** the main card shows a stepper over 16 phone-side milestones (iAP2, Wi-Fi, ctrl invite, AirPlay pairing, SETUP/RECORD, first frames) with the first missing step of the current layer. Support reports gain `STAGE_DURATIONS`, `MILESTONES` and `BLOCKED_AT` lines.
+- Pairing: `MaxPeers` and `MaxTries` rejections, and an Authentication rejection of the re-registration pair-setup after the saved trust was refused, now end the 120 s pairing window at once with a hint instead of repeating the same failure. TLV `Backoff` waits 5 s.
+- VW head units (model `VWxxxx`, such as ID7 `VW4131` and Passat 2025 `VW4211`): a ctrl invite while streaming now retires the session and reconnects to the same endpoint; invites within 15 s after a reconnect are ignored. Other receivers keep logging only. Not yet tested in a car.
+- On an orderly disconnect, send one `0xEA01` StopEASession per started protocol (same parameters as `0xEA00`) before closing the Bluetooth link, so the head unit no longer has to time the EA sessions out. Not yet tested in a car.
+- mDNS fallback: when no receiver is found, the head unit's hotspot gateway now prefers IPv4 default routes, drops unspecified addresses, and lists the other candidates in the log. Not yet tested in a car.
+- Diagnostics: unhandled CarLife commands are logged with kind, length and field shape, to trace CarWith's "return to car" button. That button still does not hand the head-unit screen back.
+- `remote` debug build only: export recent CarWith/CarLife system logs, service dumps and listener state, through Shizuku or `READ_LOGS`/`DUMP` granted over ADB; no root.
+- Validation: 827 JVM tests, 24 remote bridge tests, 56 Python tests and 20 Node tests, plus `spotlessCheck`, `lintStandardDebug` and `assembleStandardDebug`, passed locally. The signed tag workflow additionally runs `lintStandardRelease` and `assembleStandardRelease`.
+
+### 简体中文
+- **手机端界面重构：** 改为「连接 / 设置 / 诊断」三标签，Apple 风格令牌并跟随系统浅/深色；首页用状态圆点取代大车图；状态栏与手势栏透明。诊断提示与导出按钮只在已有连接记录时出现。
+- **移除 CarDeck 虚拟屏桌面**（Dock、Grid、壁纸及相关设置），现行 CarWith 路径无法到达它；「车机显示」设置面板保留。因 CarWith 码流不带方向键，HID 方向键/旋钮现在只记日志。
+- **分层连接进度：** 主卡片用步骤条展示手机侧 16 个里程碑（iAP2、Wi-Fi、ctrl 邀请、AirPlay 配对、SETUP/RECORD、首帧），并标出当前层缺失的第一步。诊断报告新增 `STAGE_DURATIONS`、`MILESTONES`、`BLOCKED_AT` 行。
+- 配对：`MaxPeers`、`MaxTries` 拒绝，以及已保存信任被拒后重新注册 pair-setup 收到的 Authentication 拒绝，现在会立即结束 120 秒配对窗口并给出提示，不再重复同一失败；TLV `Backoff` 等待 5 秒。
+- 大众车机（型号 `VWxxxx`，如 ID7 `VW4131`、帕萨特 2025 `VW4211`）：推流中收到 ctrl 邀请时，退役当前会话并重连同一地址；重连后 15 秒内的邀请忽略。其他车机仍只记日志。尚未上车验证。
+- 有序断开时，在关闭蓝牙链路前对每个已启动协议发送一次 `0xEA01` StopEASession（参数同 `0xEA00`），车机不必再等 EA 会话超时。尚未上车验证。
+- mDNS 兜底：找不到接收端时，车机热点网关优先选 IPv4 默认路由，剔除未指定地址，并在日志里列出其余候选。尚未上车验证。
+- 诊断：未识别的 CarLife 命令会记录 kind、长度和字段形状，用于追查 CarWith 的「返回车机」按钮；该按钮仍然无法把车机屏幕交还车机。
+- 仅 `remote` 调试版：导出最近的 CarWith/CarLife 系统日志、服务转储和监听状态，通过 Shizuku 或 ADB 授予的 `READ_LOGS`/`DUMP`，无需 root。
+- 验证：827 项 JVM 测试、24 项 remote 调试桥测试、56 项 Python 测试、20 项 Node 测试，以及 `spotlessCheck`、`lintStandardDebug`、`assembleStandardDebug` 在本地通过。签名的 tag 工作流还会运行 `lintStandardRelease` 和 `assembleStandardRelease`。
+
+Full changes / 完整变更: [v0.1.4...v0.1.5-test.1](https://github.com/wangxso/mcarplay/compare/v0.1.4...v0.1.5-test.1)
+
+## [v0.1.4] - 2026-11-04
+
+> Stable release collecting the VW Passat 2025, Chery Arrizo 8, steering-key and Bluetooth auto-connect work since v0.1.3. Only WinPlay was regressed on the final build. The latest Passat and Arrizo 8 candidates, DiPlay and macplay were not retested on it, and the validated vehicle scope is still the manual Chery Arrizo 8 path of v0.1.3.
+> 正式版，汇总 v0.1.3 以来大众帕萨特 2025、奇瑞艾瑞泽 8、方向盘按键与蓝牙自动连接的改动。最终构建只在 WinPlay 上回归；帕萨特与艾瑞泽 8 的最新候选、DiPlay 和 macplay 未在此构建上复测，已验证的实车范围仍是 v0.1.3 的奇瑞艾瑞泽 8 手动连接路径。
+
+### English
+- VW Passat 2025 (`VW4211`, AirPlay `320.17.3`): try head units whose SDP omits the iAP2 accessory service, keep iAP2 alive when the ctrl invite arrives before the Wi-Fi credentials, and count the invite and mDNS windows from confirmed advert visibility. Audio enabling now runs off the main thread. An earlier build showed picture and touch on this car on 2026-11-01; enabling audio there once reset the session.
+- Manual disconnect: a manual stop sets a 30-second cooldown for that receiver, so the head unit's Bluetooth ACL can no longer restart the connection half a second later; tapping Connect overrides it. Screen and session TEARDOWN are sent in the background before Bluetooth and Wi-Fi are released, and a new start waits for the old cleanup.
+- Pairing reuse: after a full pairing, the receiver identity is saved only once its signature and pair-verify succeed, and later connections go straight to pair-verify. Only an explicit authentication error clears that trust; EOF, HTTP 403 and busy responses keep it.
+- Returning from the head unit's own screen: track real screen ownership. When the receiver took the screen mid-session, the next `requestUI` rebuilds only the screen stream (TEARDOWN, SETUP and RECORD for the same display) while CarWith, audio and the control session keep running. Transcoding is used only when the source and output sizes differ and the receiver keeps asking for key frames.
+- Chery Arrizo 8: use a single 32-byte MFi challenge and the iPhone's request headers, wait for the head unit to connect back after fast outbound Bluetooth failures, send RECORD at most once per control connection on `CHERY / Tiggo / srcvers 320.17.7`, and stop heartbeats and new requests before an orderly teardown. A recorded run authenticated in about 0.5 s and showed picture about 12 s after tapping; the single-RECORD and shutdown changes have not been retested in the car.
+- Steering-wheel media keys: bitmap and array HID reports are expanded from the descriptor and fire once per press, repeating every 1.5 s while held. Previous/next go to CarWith; other keys go to the active media session. On the Arrizo 8, each of eight presses fired once; whether the track actually changed was not confirmed.
+- Lock screen: log screen off/on, unlock, Doze and battery-optimisation state during a session, and ask once before connecting when mcarplay is not exempt from battery optimisation.
+- Bluetooth auto-connect: outbound probing now runs only while the head unit's ACL is connected, for 3 minutes after a Connect tap or an ACL auto-start, or for 2 minutes after the stream ends, instead of all night after the car is switched off. Head units are also recognized by Bluetooth device class (car audio, handsfree), and `Cloudrive` and `VW BT` were added to the name keywords; headsets and wearables are excluded. Auto-connect stage timing is logged from the head unit's ACL. Not verified in a car.
+- CarWith entry: support current CarWith and older builds without `CarlifeAdbActivity`. mcarplay attaches to channels that are already running, then tries the public entry, then the built-in service when root or a Shizuku UID 0 process is confirmed, and otherwise opens CarWith's settings page. Emulator runs cover these paths; the final commit was not rerun on the emulator matrix or a physical phone.
+- Diagnostics: logs and support reports now record the pairing stage and reuse, TEARDOWN responses, screen recovery, receiver events, stream timing and Bluetooth stage timing.
+- Tools and documentation: a QQ bot that diagnoses uploaded support reports; a read-only, redacted debug-bridge log API and viewer; duplicate-free log upload in the `remote` debug variant; a HyperOS OS1–OS4 CarWith compatibility matrix; the vehicle coverage table and the README output gallery.
+- Validation: 808 JVM tests plus 20 remote bridge tests, 54 Python tests and 20 Node tests; Spotless, standard debug lint and build, standard release lint, remote debug lint and build passed. On 2026-11-04 the merged build was regressed on a WinPlay bench: picture for about 4 minutes, working touch, and sound for the music played in the final seconds. DiPlay, macplay, the VW Passat 2025 and the Chery Arrizo 8 were not retested on this build.
+
+### 简体中文
+- 大众帕萨特 2025（`VW4211`，AirPlay `320.17.3`）：SDP 未声明 iAP2 配件服务的车机也会尝试连接；ctrl 邀请先于 Wi-Fi 凭据到达时保持 iAP2；邀请与 mDNS 等待窗口从确认看到广播起算。开启音频改到主线程之外执行。早期构建 2026-11-01 在该车上出画并可触控；当时开启声音曾使会话被车机重置。
+- 手动断开：手动停止后对该接收端记 30 秒冷却，车机蓝牙 ACL 不会再在半秒后自动重新拉起连接；手动点「连接」可解除冷却。屏幕流与会话 TEARDOWN 在后台发送后再释放蓝牙和 Wi-Fi，新连接等旧清理结束再开始。
+- 配对复用：完整配对后，只有签名与 pair-verify 都通过才保存接收端身份，之后直接 pair-verify。只有明确的认证错误会清除信任；EOF、HTTP 403 和忙碌应答保留信任。
+- 从车机原厂界面返回：记录真实的屏幕归属。车机在会话中接管屏幕后，下一次 `requestUI` 只重建屏幕流（同一显示的 TEARDOWN、SETUP、RECORD），CarWith、音频与控制会话保持运行。只有源与输出尺寸不同且车机持续要关键帧时才转码。
+- 奇瑞艾瑞泽 8：MFi 固定使用一次 32 字节挑战和 iPhone 的请求头；手机主动蓝牙连接快速失败后等车机回连；`CHERY / Tiggo / srcvers 320.17.7` 每条控制连接最多发一次 RECORD；有序断开前先停心跳与新请求。已记录的一次实车运行约 0.5 秒完成认证、点击后约 12 秒出画；单次 RECORD 与断开改动尚未上车复测。
+- 方向盘媒体键：按 HID 描述符展开位图与数组报文，每次按下只触发一次，按住每 1.5 秒连发。上一曲/下一曲交给 CarWith，其余按键交给当前媒体会话。艾瑞泽 8 上 8 次按键各触发一次；是否实际切歌未确认。
+- 锁屏：会话期间记录息屏/亮屏、解锁、Doze 与电池优化状态；mcarplay 未豁免电池优化时，连接前提示一次。
+- 蓝牙自动连接：出站探测只在车机 ACL 已连上、点「连接」或 ACL 自动拉起后 3 分钟内、推流结束后 2 分钟内进行，车辆熄火后不再整夜探测。车机除名称外也按蓝牙设备类别（车载音响、免提）识别，名称关键词新增 `Cloudrive` 与 `VW BT`；耳机与可穿戴设备排除在外。按车机 ACL 记录自动连接各阶段耗时。未在车上验证。
+- CarWith 入口：同时支持当前 CarWith 与没有 `CarlifeAdbActivity` 的旧版。先附着已在运行的通道，再尝试公开入口；确认 root 或 Shizuku 为 UID 0 时启动内置服务，否则打开 CarWith 设置页。模拟器结果覆盖这些路径；最终提交未在模拟器矩阵或实体手机上重跑。
+- 诊断：日志与诊断报告新增配对阶段与复用、TEARDOWN 应答、屏幕恢复、车机事件、码流时序和蓝牙阶段耗时。
+- 工具与文档：可诊断上传报告的 QQ 机器人；只读、脱敏的调试桥日志 API 与查看页；`remote` 调试版日志上传去重；HyperOS OS1–OS4 CarWith 兼容矩阵；车机覆盖表与 README 效果图。
+- 验证：808 项 JVM 测试及 20 项 remote 调试桥测试、54 项 Python 测试、20 项 Node 测试，以及 Spotless、standard debug lint 与构建、standard release lint 和 remote debug lint 与构建均通过。2026-11-04 合并构建在 WinPlay 台架回归：约 4 分钟画面、触控正常，最后几秒播放的音乐有声。DiPlay、macplay、大众帕萨特 2025 与奇瑞艾瑞泽 8 未在此构建上复测。
+
+Full changes / 完整变更: [v0.1.3...v0.1.4](https://github.com/wangxso/mcarplay/compare/v0.1.3...v0.1.4)
+
+## [v0.1.3] - 2026-10-31
+
+> First stable release for the manually initiated wireless path validated on the recorded Xiaomi phone and Chery head-unit firmware. Manual phone locking can still end a session; automatic initiation, full cold-start behavior and broader steering-wheel control are not release promises.
+> 首个正式版，验证范围限定于已记录的小米手机与奇瑞车机固件上的手动发起无线连接路径。手动锁屏仍可能结束会话；自动触发、完整冷启动及更完整的方向盘控制不在本版承诺范围内。
+
+### English
+- Advertise the phone's CarPlay capability alongside its iAP2 Bluetooth service while connecting, and remove both records on stop. Roll back the transport record if capability registration fails. Clarify that a missing receiver-side `…caff` service does not rule out head-unit-initiated CarPlay.
+- On a 2022 Chery Arrizo 8 with firmware `M1E_IC2172/82_03_21.387_250619_R`, the remote debug candidate connected wirelessly after the user selected the phone in the head unit's Bluetooth list. The user reported about two hours of normal use, with one phone-lock-triggered exit followed by successful direct reconnection without restarting the head unit. Remote logs now confirm two media sessions totaling about 107 minutes, the longest about 99 minutes, with reconnection to the first video frame in about 26 seconds. The user confirmed the first exit followed phone locking and the final exit ended the test. Sender audio timing showed no accumulated lag; this is not a direct measurement of playback latency. Phone-lock behavior, automatic initiation, full cold-start behavior and a previously observed receiver AirPlay crash after disconnection remain unresolved.
+- Validation: 601 JVM tests, 26 Python tests, Spotless, standard debug lint and build, standard release lint, and remote debug lint and build passed.
+
+### 简体中文
+- 连接期间在 iAP2 蓝牙服务之外公告手机的 CarPlay 能力，停止时同时撤销；能力公告注册失败时回收传输记录。澄清接收端未声明 `…caff` 不代表不能由车机主动发起 CarPlay。
+- 2022 款奇瑞艾瑞泽 8（固件 `M1E_IC2172/82_03_21.387_250619_R`）在车机蓝牙列表手动点手机后，remote debug 修复候选无线连上；用户确认约两小时使用无其他异常，一次手动锁屏退出后可直接重新连接，无需重启中控。remote 日志已确认两轮媒体累计约 107 分钟、最长约 99 分钟，锁屏退出后约 26 秒重新出画；用户确认末次退出为结束测试。发送端音频时间轴未见累计落后，此项不是实际扬声器延迟测量。锁屏退出、自动触发、完整冷启动及此前断开后的车机 AirPlay 崩溃仍未解决。
+- 验证：601 项 JVM 测试、26 项 Python 测试、Spotless、standard debug lint 与构建、standard release lint、remote debug lint 与构建均通过。
+
+Full changes / 完整变更: [v0.1.3-test.4...v0.1.3](https://github.com/wangxso/mcarplay/compare/v0.1.3-test.4...v0.1.3)
+
+## [v0.1.3-test.4] - 2026-10-30
+
+> Experimental fix prerelease. Audio mixing and gap filling were tested separately on WinPlay 1.2.5; their combined build and live duck-level adjustment still need device validation. This does not establish real-car compatibility.
+> 实验性修复预发布。混音与断流补静音已分别在 WinPlay 1.2.5 验证；组合构建及连接中调整压低音量仍待实机验证，不代表实车兼容。
+
+### English
+- Keep the external CarWith audio RTP timeline aligned with elapsed time across upstream stalls: after the first real frame, fill gaps with encoded silence after a 120 ms grace period; skip overdue slots if the sender thread falls more than one second behind. This addresses persistent silence after navigation or short interruptions. In the 20:26–20:48 WinPlay 1.2.5 bench window, the user confirmed normal sound after navigation, pause/resume, track changes and reconnection; sender logs recorded 2,846 silence frames, no skipped slots and no accumulated timeline lag. These results cover the gap-fill build, separately from the mixing build below.
+- Add **界面语言 / Language**: the interface can switch between Simplified Chinese (the default, regardless of the system language) and English, covering the main screen, dialogs, car settings, the detection panel, the update page, notifications, the car dashboard and the disclaimer. Android 13 and later also list both languages in the system per-app language settings. Logs, diagnostic reports and protocol fields stay in Chinese.
+- After each update, the first launch shows that version's release notes in the chosen language, from the `CHANGELOG.md` entry bundled into the APK; validation lines are omitted, and a fresh install shows the disclaimer instead. The update page also shows only the chosen language's half of the release notes.
+- When a target head unit is selected, log once per connection start which Bluetooth services it advertises over SDP and whether the wireless CarPlay iAP2 service (`…caff`) is among them, so a head unit that lacks wireless CarPlay can be told apart from one that is not in its pairing window. An SDP timeout is reported as undetermined, not as missing.
+- Navigation prompts over music: CarWith's navigation (9241) and voice (9242) audio is now mixed on the phone with the music (9240) into the one negotiated AirPlay stream. The music fades to -15 dB over 250 ms before a prompt and back over 400 ms after it, instead of being dropped for 500 ms after every prompt packet. Those drops left holes in the RTP timeline; on WinPlay 1.2.5 the music went silent for the rest of the session after the first prompt. Mixing happens before encoding, so the AAC-LC → PCM fallback is unchanged. Bench-tested on WinPlay 1.2.5 with a Xiaomi 17 Pro Max (2026-10-30): music was lowered during prompts and came back afterwards. DiPlay, MacPlay and real cars are not verified. See `docs/AUDIO-DUCKING.md`.
+- Add **Music volume during navigation** under car settings → Display (0 to -30 dB, default -15 dB); changes apply immediately while connected. Values other than -15 dB are not verified on device.
+- Make live duck-level handoff atomic so the audio worker cannot discard a newer setting while consuming an older one. Stabilize the discovery port-release test by retrying connection resets while still requiring connection refusal to pass.
+- Validation: 598 JVM tests and 26 Python tests, `spotlessCheck`, `lintStandardDebug`, `lintStandardRelease`, `assembleStandardDebug`, `lintRemoteDebug` and `assembleRemoteDebug` passed. The signed tag workflow also runs release checks and verifies the APK signature. The combined mixing/gap-fill build, live duck-level adjustment, SDP log, language switching and the release-notes popup are not yet verified on device.
+
+### 简体中文
+- CarWith 外部音频断流时保持 RTP 时间轴跟随实际经过时间：首个真实帧之后，超过 120ms 宽限仍缺数据就补编码静音；发送线程落后超过 1 秒时跳过过期帧槽，处理导航或短暂中断后持续无声的问题。20:26–20:48 的 WinPlay 1.2.5 台架中，用户确认导航、暂停恢复、换曲和重连后声音正常；日志累计补静音 2846 帧、跳帧 0，未见时间轴累计落后。该结果来自补静音构建，与下述混音构建分别验证。
+- 新增 **界面语言**：界面可在简体中文（默认，不跟随系统语言）和英文之间切换，覆盖首页、各类弹窗、车机设置、检测面板、更新页、通知、车机仪表盘和免责声明；Android 13 及以上也会出现在系统「应用语言」设置中。日志、诊断报告和协议字段保持中文。
+- 每次更新后首次打开，按所选语言弹出该版本的更新内容，来源为打包进 APK 的 `CHANGELOG.md` 条目，不显示验证条目；全新安装则先显示免责声明。更新页的发行说明也只显示所选语言那一半。
+- 指定目标车机时，每次启动连接记录一次它通过 SDP 声明的蓝牙服务，以及其中是否有无线 CarPlay 的 iAP2 服务（`…caff`），用于区分「车机不支持无线 CarPlay」与「支持但未进入配对窗口」。SDP 超时记为「未确定」，不记为没有。
+- 音乐中插入导航提示：CarWith 的导航（9241）与语音（9242）音频现在在手机侧与音乐（9240）混成唯一一条已协商的 AirPlay 音频流，提示前音乐在 250ms 内淡到 -15dB、结束后 400ms 内淡回，不再在每个提示包后丢弃 500ms 音乐。被丢的样本会在 RTP 时间线上留下空洞，WinPlay 1.2.5 上表现为首次导航提示后整个会话无声。混音在编码之前，AAC-LC → PCM 降级不变。已在 WinPlay 1.2.5 + 小米 17 Pro Max 台架验证（2026-10-30）：提示期间音乐压低、结束后恢复；DiPlay、MacPlay 与真实车机未验证。详见 `docs/AUDIO-DUCKING.md`。
+- 新增 **车机设置 → 显示 → 导航时音乐音量**（0 至 -30dB，默认 -15dB），连接中调整立即生效；-15dB 以外的取值未实机验证。
+- 音量设置改为原子交接，避免音频线程处理旧值时丢掉刚更新的设置。发现服务端口释放测试遇到连接重置时重试，仍要求连接被拒绝才判定通过，减少 CI 偶发失败。
+- 验证：598 项 JVM 测试、26 项 Python 测试、`spotlessCheck`、`lintStandardDebug`、`lintStandardRelease`、`assembleStandardDebug`、`lintRemoteDebug` 和 `assembleRemoteDebug` 均通过。签名标签工作流另执行发布检查及 APK 签名校验。混音与补静音的组合构建、连接中调整压低音量、SDP 日志、语言切换和更新内容弹窗尚未实机验证。
+
+Full changes / 完整变更: [v0.1.3-test.3...v0.1.3-test.4](https://github.com/wangxso/mcarplay/compare/v0.1.3-test.3...v0.1.3-test.4)
+
+## [v0.1.3-test.3] - 2026-10-29
+
+> Experimental prerelease: lets phones without Shizuku supply their real Bluetooth address; the new address flow has not been verified on device and this does not establish real-car compatibility.
+> 实验性预发布：未使用 Shizuku 的手机也能提供真实蓝牙地址；新的地址流程尚未实机验证，不代表实车兼容。
+
+### English
+- Add **本机蓝牙地址** to the connection checklist: receivers such as WinPlay check the phone's real Bluetooth address, which Android hides from ordinary apps. A live Shizuku (or system settings) read wins and is now saved for later sessions without Shizuku; otherwise a manually entered address is used. Entries are validated (placeholder, random, multicast and malformed addresses are rejected), and logs and the support report state the source (`bluetooth.identitySource`) without the address.
+- When Shizuku is not ready and no address has been entered or saved, **启动连接** now asks for the phone's real Bluetooth address first, explains where to find it, and continues the connection after it is saved. **仍然连接** keeps the previous behavior.
+- README: native video at the receiver's aspect ratio, touch on DiPlay and WinPlay 1.2.5, media keys, the 25-minute WinPlay run, and WinPlay as a bench receiver.
+- Validation: 546 JVM tests, 26 Python tests, `spotlessCheck`, `lintStandardDebug`, `lintStandardRelease`, `assembleStandardRelease` and `assembleRemoteDebug` passed. The manual address flow and the new prompt are not yet verified on device.
+
+### 简体中文
+- 「连接准备」新增 **本机蓝牙地址**：WinPlay 等接收端会核对手机真实蓝牙地址，而 Android 不让普通应用读取。Shizuku（或系统设置）实时读取优先，并会保存下来供之后没有 Shizuku 时使用；否则使用手动填写的地址。填写会校验格式（拒绝占位、随机、组播及格式错误的地址），日志与诊断报告只记录来源（`bluetooth.identitySource`），不记录地址本身。
+- Shizuku 未就绪、且没有手动填写或保存过地址时，点 **启动连接** 会先提示填写本机真实蓝牙地址并说明查找位置，保存后自动继续连接；选 **仍然连接** 则与以前相同。
+- README：更新原生视频按接收端宽高比编码、DiPlay 与 WinPlay 1.2.5 触控、媒体键、WinPlay 约 25 分钟运行，以及 WinPlay 桌面测试说明。
+- 验证：546 项 JVM 测试、26 项 Python 测试、`spotlessCheck`、`lintStandardDebug`、`lintStandardRelease`、`assembleStandardRelease` 和 `assembleRemoteDebug` 均通过。手动地址流程与新提示尚未实机验证。
+
+Full changes / 完整变更: [v0.1.3-test.2...v0.1.3-test.3](https://github.com/wangxso/mcarplay/compare/v0.1.3-test.2...v0.1.3-test.3)
+
+## [v0.1.3-test.2] - 2026-10-27
+
+> Experimental prerelease: validated on WinPlay 1.2.5 with a Xiaomi phone (release gate met); this does not establish real-car compatibility.
+> 实验性预发布：已在 WinPlay 1.2.5 与小米手机上实机验证（满足发布门槛）；不代表实车兼容。
+
+### English
+- Fix no CarWith sound when Bluetooth auto-start races a manual start: the auto-start path no longer turns off sound when native CarWith audio is available. Log the first frame of each CarLife audio kind and count frames the parser drops, so a 0-packet session shows whether CarWith sent anything.
+- Add **检测当前车机**: collect connection evidence, confirm picture/sound/touch, and atomically save device-specific settings locally. Try one explicit Bluetooth-stage alternative; limit fallback-port and `/info` method probes; reuse confirmed audio preferences only for matching capabilities. Cancellation preserves previous settings, unknown results stay unverified, and no model list or automatic upload is added.
+- Treat WinPlay firmware 1.2.5 like 1.2.4: check the real Bluetooth identity before SETUP and keep the network session when WinPlay releases Bluetooth after network authentication. Other WinPlay versions stay conservative.
+- Forward receiver next/previous media keys to CarWith, and request a CarWith encode size that keeps the receiver's aspect ratio.
+- Add two opt-in compatibility fallbacks in **车机设置 → 显示**, both off by default: retry with an unencrypted session after an ordinary pairing failure, and try the PCM 48 kHz audio baseline when the receiver lists no usable media format.
+- Restyle the detection and update entries, the update page and the detection panel to match the app's dark settings style.
+- The remote debug flavor logs phone, HyperOS, CarWith and CarLife versions when it connects to the debug server.
+- Device validation (2026-10-27, Xiaomi 2509FPN0BC, HyperOS OS4.0, CarWith 4.0.20, Xiaomi CarLife 8.8.5): on WinPlay 1.2.5 with default settings (both fallbacks off, auto-connect on), picture, touch, music and navigation prompts reached the receiver; a session ran about 25 minutes after Bluetooth release; sessions reconnected after a manual disconnect and after manual network loss. Short WinPlay 1.2.4 and DiPlay runs also delivered picture and sound. The detection wizard's interactive flow and the new WinPlay 1.2.5 policy rule were not exercised on device. Details: `docs/CARWITH-ENTRY-FINDINGS.md`.
+- Validation: 543 JVM tests, 26 Python tests, `spotlessCheck`, `lintStandardRelease` and `assembleStandardRelease` passed; `lintRemoteDebug` and `assembleRemoteDebug` passed earlier on this branch.
+
+### 简体中文
+- 修复蓝牙自动启动与手动启动相互覆盖导致 CarWith 无声：CarWith 原生音频可用时，自动启动不再关闭声音。CarLife 各音频帧类型首帧入日志，并统计解析器丢弃的帧，0 包会话可据此判断 CarWith 是否发送过数据。
+- 新增 **检测当前车机**：收集连接证据，由用户确认画面／声音／触控后，按设备原子保存本地配置。蓝牙阶段可显式对照一次，端口及 `/info` 方法探测有界；音频偏好仅在能力匹配时复用。取消保留旧配置，未知结果保持未验证，无需车型列表，不自动上传。
+- WinPlay 固件 1.2.5 与 1.2.4 采用相同处理：SETUP 前检查真实蓝牙身份，网络认证后 WinPlay 释放蓝牙时保留网络会话；其他 WinPlay 版本仍按保守策略。
+- 接收端的上一曲／下一曲转发给 CarWith；向 CarWith 请求与接收端宽高比一致的编码尺寸。
+- 在 **车机设置 → 显示** 新增两个兼容兜底开关，均默认关闭：普通配对失败后改用明文会话重试；接收端未声明可用的媒体音频格式时按 PCM 48kHz 基线尝试。
+- 「检测当前车机」「检查更新」入口、更新页和检测面板改为与应用一致的深色设置风格。
+- remote 调试版本连上调试服务器时自动记录手机、HyperOS、CarWith 与 CarLife 版本。
+- 实机验证（2026-10-27，小米 2509FPN0BC、HyperOS OS4.0、CarWith 4.0.20、小米 CarLife 8.8.5）：WinPlay 1.2.5 默认设置（两个兜底开关关闭、「上车自动连接」开启）下，画面、触控、音乐和导航提示到达接收端；蓝牙释放后会话持续约 25 分钟；手动断开及手动断网后均能重连。WinPlay 1.2.4 与 DiPlay 短时实测亦出画面和声音。检测向导的实机交互及新的 WinPlay 1.2.5 策略规则未经实机验证。详见 `docs/CARWITH-ENTRY-FINDINGS.md`。
+- 验证：543 项 JVM 测试、26 项 Python 测试、`spotlessCheck`、`lintStandardRelease` 和 `assembleStandardRelease` 均通过；`lintRemoteDebug` 与 `assembleRemoteDebug` 已在本分支此前通过。
+
+Full changes / 完整变更: [v0.1.3-test.1...v0.1.3-test.2](https://github.com/wangxso/mcarplay/compare/v0.1.3-test.1...v0.1.3-test.2)
+
+## [v0.1.3-test.1] - 2026-10-27
+
+> Experimental prerelease: receiver policy and Wi-Fi/CarWith fixes passed offline checks; receiver-specific behavior and real-car media stability still need device validation.
+> 实验性预发布：接收端策略及 Wi-Fi/CarWith 修复已通过离线检查；接收端专项行为和真实车机媒体稳定性仍待实机验证。
+
+### English
+- Add one receiver compatibility policy based on Bluetooth identity/firmware/EA, mDNS features/srcvers, AirPlay `/info` capabilities and current-session state. Pairing, Bluetooth handoff, recovery exceptions, audio selection and compatibility memory now follow the same endpoint evidence; unknown receivers remain conservative.
+- Keep active Wi-Fi video sessions alive when a receiver releases Bluetooth after network handoff, and report automatic Bluetooth loss separately from a user disconnect.
+- Stabilize same-LAN Wi-Fi and CarWith setup by refreshing stale network bindings and respecting system network-picker and join lifecycles.
+- Advance the Android base version to `0.1.3` (`versionCode=1030000`); tagged builds identify `v0.1.3-test.1`.
+- Validation: 493 JVM tests, 26 Python tests, `spotlessCheck`, `lintStandardRelease` and `assembleStandardRelease` passed. No new vehicle-compatibility claim is made; receiver behavior and full media regression still need device validation.
+
+### 简体中文
+- 新增统一接收端兼容策略，依据蓝牙身份/固件/EA、mDNS features/srcvers、AirPlay `/info` 能力及本轮会话状态，统一决定配对、蓝牙交接、恢复例外、音频选择和兼容记忆；未知接收端继续采用保守策略。
+- 接收端完成网络交接并释放蓝牙时，保留仍在运行的 Wi-Fi 视频会话；诊断中区分蓝牙自动断开与用户主动断开。
+- 通过刷新过期网络绑定并正确处理系统选网框和入网生命周期，提升同局域网 Wi-Fi 与 CarWith 启动流程的稳定性。
+- Android 基础版本升级为 `0.1.3`（`versionCode=1030000`）；标签构建记录 `v0.1.3-test.1`。
+- 验证：493 项 JVM 测试、26 项 Python 测试、`spotlessCheck`、`lintStandardRelease` 和 `assembleStandardRelease` 均通过。不新增实车兼容声明；接收端行为及完整媒体回归仍待实机验证。
+
+Full changes / 完整变更: [v0.1.2-test.1...v0.1.3-test.1](https://github.com/wangxso/mcarplay/compare/v0.1.2-test.1...v0.1.3-test.1)
+
+## [v0.1.2-test.1] - 2026-10-26
+
+> Experimental prerelease: GitHub updates have passed offline validation;
+> on-device installation, permissions and post-upgrade connection regression remain pending.
+> 实验性预发布：GitHub 更新已通过离线验证；手机端安装、权限和升级后连接回归仍待完成。
+
+### English
+- Add a main-screen GitHub update flow with release notes, stable/preview channels, cancellable APK downloads and explicit Android installer confirmation.
+- Verify download size/SHA-256, package/version, Android requirements and the installed signing certificate; refuse downgrades and standard APK updates for the remote flavor.
+- Record release tags in tagged builds to compare preview iterations; explain when older/local builds lack enough metadata to compare the same base version.
+- Advance the Android base version to `0.1.2` (`versionCode=1020000`) and record `v0.1.2-test.1` in the tagged APK. In-place upgrades require the same signing key.
+- Document update behavior and device acceptance checks. On-device installation and connection regression remain pending.
+- Offline validation: 449 JVM tests (37 update tests), 26 Python tests, formatting, standard debug/release lint and standard debug/release plus remote debug APK builds.
+
+### 简体中文
+- 首页新增 GitHub 更新入口：更新说明、正式/预发布频道、可取消 APK 下载，最后由用户在 Android 系统安装器确认。
+- 检查大小/SHA-256、包名/版本、Android 要求及当前签名证书，阻止降级和 remote 版安装标准发行 APK。
+- 标签构建记录发行标签以比较预发布先后；旧版/本地包缺少同基础版本比较信息时明确说明。
+- Android 基础版本升级为 `0.1.2`（`versionCode=1020000`），标签 APK 记录 `v0.1.2-test.1`。覆盖升级须使用同一签名密钥。
+- 补充更新机制与设备验收文档；手机端安装及连接回归仍待完成。
+- 离线验证：449 项 JVM 测试（其中 37 项更新测试）、26 项 Python 测试、格式、standard debug/release lint、standard debug/release 与 remote debug APK 构建。
+
+Full changes / 完整变更: [v0.1.1-test.2...v0.1.2-test.1](https://github.com/wangxso/mcarplay/compare/v0.1.1-test.2...v0.1.2-test.1)
+
+## [v0.1.1-test.2] - 2026-10-26
+
+> Experimental prerelease: diagnostics fixes have passed offline checks only;
+> on-device permission prompts, concurrent self-test and Bluetooth-drop reporting remain to be verified.
+> 实验性预发布：诊断修复仅完成离线验证，实机权限弹窗、自检与连接并行及蓝牙断开报告仍待确认。
+
+### English
+- Diagnostics: a Bluetooth link drop during Wi-Fi join, or an exception after it, is recorded as `BT_LINK_CLOSED` instead of a user stop; exceptions keep the stage-specific code (`SETUP_FAILED`, `CARWITH_FAILED`, …) instead of `CONNECTION_INCOMPLETE`.
+- Diagnostics: CarWith self-tests use their own timeline (`track=self_test`), so a self-test and a CarPlay attempt no longer cancel each other's records.
+- Diagnostics: showing a permission dialog is no longer recorded as a failed attempt; only a denial is (new code `WIFI_PERMISSION` for Android 13+).
+- Diagnostics: a video stream that ends after frames were sent is recorded as a normal stop, not a failure.
+- Reports: known names are replaced only as whole words, and a `name` label inside an identifier such as `serviceName=` is no longer treated as a name.
+- Diagnostic records are written on a background thread, outside the timeline lock, so video, audio and UI threads no longer wait on disk writes.
+- Validation: 412 JVM tests, 26 Python tests, formatting, Android lint and local APK builds passed. No new vehicle-compatibility claim is made.
+
+### 简体中文
+- 诊断：加入热点期间蓝牙链路断开（或随后发生异常）记为 `BT_LINK_CLOSED`，不再记成用户停止；异常保留阶段错误码（`SETUP_FAILED`、`CARWITH_FAILED` 等），不再统一记为 `CONNECTION_INCOMPLETE`。
+- 诊断：CarWith 自检使用独立时间线（`track=self_test`），自检与 CarPlay 连接不再互相顶掉记录。
+- 诊断：弹出权限对话框不再记为连接失败，只有拒绝授权才记录（Android 13+ 新增错误码 `WIFI_PERMISSION`）。
+- 诊断：已发出视频帧后视频连接结束记为正常结束，不再算作失败。
+- 报告：已知名称只按完整单词替换；`serviceName=` 这类标识符里的 `name` 不再被当作名称。
+- 诊断记录改在后台线程、时间线锁外写盘，视频、音频和界面线程不再等待磁盘写入。
+- 验证：412 项 JVM 测试、26 项 Python 测试、格式、Android lint 和本地 APK 构建通过；不新增实车适配声明。
+
+Full changes / 完整变更: [v0.1.1-test.1...v0.1.1-test.2](https://github.com/wangxso/mcarplay/compare/v0.1.1-test.1...v0.1.1-test.2)
+
+## [v0.1.1-test.1] - 2026-10-26
+
+> Experimental prerelease: diagnostics changes have passed offline checks only;
+> on-device export, permission interactions and Xiaomi connection regression remain pending.
+> 实验性预发布：诊断改动仅完成离线验证，实机导出、权限交互及小米连接回归仍待完成。
+
+### English
+- Add connection-stage IDs, error codes/advice and a main-screen redacted support-report export button.
+- Preserve bounded previous-process logs, critical JSONL events, uncaught stacks and app-only system exit evidence.
+- Distinguish native media input from transport writes; include format and memory samples without per-frame disk logging.
+- Include APK/signing fingerprints, component versions, permissions and network snapshots; redact common credentials, wire dumps and identifiers.
+- Add an offline analyzer and regression tests. No automatic upload is introduced.
+- CI: share one build-setup action, cache pip, skip documentation-only changes and add APK size/SHA-256 job summaries.
+- Signed workflow: reject a wrong keystore password or alias before building, upload reports on failure, and update an existing release when re-run.
+- Validation: 399 JVM tests, 26 Python tests, formatting, Android lint and local APK builds passed. No new vehicle-compatibility claim is made.
+- Android app version advances to `0.1.1` (`versionCode=1010000`); GitHub tag `v0.1.1-test.1` identifies the prerelease. Signed upgrades require the same signing certificate; local debug builds use a different certificate.
+- Diagnostics are evidence, not guaranteed root-cause attribution. Review redacted reports before sharing; no automatic upload is introduced.
+
+### 简体中文
+- 新增连接阶段/会话编号、错误码与处置提示，首页可直接导出脱敏诊断报告。
+- 有界保留最近进程日志、关键 JSONL 事件、堆栈及本应用系统退出证据。
+- 区分原生媒体输入和实际发送计数，补充格式与内存采样，避免逐帧写盘。
+- 报告包含 APK/签名指纹、组件版本、权限和网络快照，处理常见凭据、原始报文和标识信息。
+- 新增离线分析器和回归测试，不会自动上传日志。
+- CI：两个工作流共用构建环境配置，缓存 pip，仅改文档时跳过构建，并在运行摘要中显示 APK 大小与 SHA-256。
+- 签名工作流：构建前即校验 keystore 密码与别名，失败时上传报告，重跑时更新已存在的 Release 而非报错。
+- 验证：399 项 JVM 测试、26 项 Python 测试、格式、Android lint 和本地 APK 构建通过；不新增实车适配声明。
+- Android 应用版本升级为 `0.1.1`（`versionCode=1010000`），GitHub 标签为 `v0.1.1-test.1`。正式签名覆盖更新需使用同一证书；本地 debug 包使用不同证书。
+- 诊断报告只表明已记录的事实，不能保证还原所有根因；分享前仍须检查脱敏结果，不会自动上传。
+
+Full changes / 完整变更: [v0.1.0-test.4...v0.1.1-test.1](https://github.com/wangxso/mcarplay/compare/v0.1.0-test.4...v0.1.1-test.1)
+
+## [v0.1.0-test.4] - 2026-10-26
+
+### English
+
+**Added**
+- README badges for Android CI, the latest release, release downloads, Android 12+, MIT licensing, experimental status and GitHub stars.
+- A versioned bilingual changelog, linked from both READMEs and included in source upload bundles.
+
+**Changed**
+- Tagged releases now use the matching changelog entry as their GitHub release notes, instead of only generating a commit link.
+- Missing, empty or duplicate release-note entries stop publication before signing.
+- The discovery responder's port-release assertion now allows bounded kernel shutdown latency, avoiding an immediate-connect race seen on hosted CI runners.
+
+**Validation and scope**
+- No application runtime changes compared with `v0.1.0-test.3`; this is a documentation and release-process update.
+- The existing 364 JVM tests, Android lint, formatting checks and APK build are retained as release gates; release-note extraction has dedicated Python tests.
+- The APK still reports Android version `0.1.0`, as in the previous test release. The GitHub tag identifies this prerelease iteration.
+- APK, SHA-256 checksums and signing-certificate information are published as release assets. Keep the previous signing key for in-place updates.
+- Xiaomi-to-DiPlay video, music and touch have bench-test evidence. Real vehicles, navigation announcements, pause/resume and extended stability still require validation.
+
+### 简体中文
+
+**新增**
+- 中英文 README 徽章：构建状态、最新版本、Release 下载量、Android 12+、MIT 许可证、实验状态和 Stars。
+- 按版本维护的中英文 changelog；两份 README 均提供入口，源码上传包也包含更新日志。
+
+**调整**
+- 标签发布直接读取对应版本的 changelog 作为 GitHub Release 正文，不再只有自动生成的提交链接。
+- 对应更新说明缺失、为空或重复时，在签名前终止发布。
+- 发现服务的端口释放断言改为有界等待内核完成关闭，避免托管 CI 上立即重连探测产生的竞态误报。
+
+**验证与范围**
+- 相比 `v0.1.0-test.3` 没有应用运行逻辑变化，本次为文档与发布流程更新。
+- 保留 364 项 JVM 测试、Android lint、格式检查和 APK 构建门槛；为更新说明提取新增 Python 专项测试。
+- APK 在 Android 中仍显示 `0.1.0`，与上一测试版一致；GitHub 标签区分本轮预发布。
+- Release 附带 APK、SHA-256 校验文件和签名证书信息；覆盖更新需沿用上一版签名密钥。
+- 小米到 DiPlay 的画面、音乐和触控已有测试证据；实车、导航提示、暂停恢复和长时间稳定性仍待验证。
+
+Full changes / 完整变更: [v0.1.0-test.3...v0.1.0-test.4](https://github.com/wangxso/mcarplay/compare/v0.1.0-test.3...v0.1.0-test.4)
+
+## [v0.1.0-test.3] - 2026-10-26
+
+### English
+- Fixed uncaught heartbeat interruption during normal CarLife shutdown, with a 20-cycle regression test.
+- Stopped the session's CarLife source and native audio bridge when video streaming ends; guarded stale video callbacks from cleaning up a replacement session.
+- Documented Xiaomi/DiPlay disconnect evidence and intentional receiver-loss, manual-disconnect and reconnect checks; no new heartbeat FATAL was observed in that device regression.
+- Shipped mcarplay branding, the Mi-style launcher icon and the existing CarWith video/audio/touch bridge.
+- Local verification: 364 JVM tests and 12 Python tests passed, alongside formatting, lint and build checks. The signed GitHub APK workflow completed successfully.
+
+### 简体中文
+- 修复 CarLife 正常停止时心跳线程中断产生未捕获异常的问题，新增连续 20 次启停回归。
+- 视频结束时停止本轮 CarLife 源和原生音频桥；隔离旧视频回调，避免清理替代会话。
+- 补充小米与 DiPlay 断连证据，以及接收端丢失、手动断开和重连记录；设备回归未新增心跳 FATAL。
+- 包含 mcarplay 品牌、Mi 风格启动图标和已有 CarWith 视频、音频、触控桥接。
+- 本地验证：364 项 JVM 测试、12 项 Python 测试、格式检查、lint 和构建通过；GitHub 签名 APK 流程成功。
+
+[v0.1.0-test.4]: https://github.com/wangxso/mcarplay/releases/tag/v0.1.0-test.4
+[v0.1.1-test.1]: https://github.com/wangxso/mcarplay/releases/tag/v0.1.1-test.1
+[v0.1.0-test.3]: https://github.com/wangxso/mcarplay/releases/tag/v0.1.0-test.3

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>CarWith 网页桥接</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+  html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; display:flex; align-items:center; justify-content:center; }
+  canvas { max-width:100vw; max-height:100vh; width:100%; height:100%; object-fit:contain; display:block; }
+  .topButton { position:fixed; z-index:10000; right:12px; padding:8px 12px; border:1px solid #ffffff88; border-radius:18px; background:#111c; color:#fff; font:14px sans-serif; }
+  #fullscreenBtn { top:12px; }
+  #audioBtn { top:58px; }
+  #fitBtn { top:104px; }
+  #disconnectBtn { top:150px; }
+  #videoInfo { position:fixed; z-index:10000; left:8px; bottom:8px; padding:4px 7px; border-radius:5px; background:#111a; color:#fff; font:12px sans-serif; pointer-events:none; }
+</style>
+</head>
+<body>
+<button class="topButton" id="fullscreenBtn" type="button">全屏</button>
+<button class="topButton" id="audioBtn" type="button">开启车机声音</button>
+<button class="topButton" id="fitBtn" type="button">铺满屏幕（裁边）</button>
+<button class="topButton" id="disconnectBtn" type="button">断开投屏</button>
+<canvas id="v"></canvas>
+<div id="videoInfo">等待画面</div>
+<script>
+const canvas = document.getElementById('v');
+const accessKey = new URLSearchParams(location.search).get('key') || '';
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const audioBtn = document.getElementById('audioBtn');
+const fitBtn = document.getElementById('fitBtn');
+const videoInfo = document.getElementById('videoInfo');
+const disconnectBtn = document.getElementById('disconnectBtn');
+let fillMode = false;
+fitBtn.addEventListener('pointerdown', e => e.stopPropagation(), { passive:true });
+fitBtn.addEventListener('pointerup', e => e.stopPropagation(), { passive:true });
+fitBtn.addEventListener('click', e => {
+  e.preventDefault(); e.stopPropagation();
+  fillMode = !fillMode;
+  canvas.style.objectFit = fillMode ? 'cover' : 'contain';
+  fitBtn.textContent = fillMode ? '显示完整画面' : '铺满屏幕（裁边）';
+  updateRect();
+});
+disconnectBtn.addEventListener('pointerdown', e => e.stopPropagation(), { passive:true });
+disconnectBtn.addEventListener('pointerup', e => e.stopPropagation(), { passive:true });
+disconnectBtn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action:'disconnect' })); });
+let audioContext = null;
+let audioSocket = null;
+let audioNode = null;
+audioBtn.addEventListener('pointerdown', e => e.stopPropagation(), { passive:true });
+audioBtn.addEventListener('pointerup', e => e.stopPropagation(), { passive:true });
+audioBtn.addEventListener('click', async e => {
+  e.preventDefault(); e.stopPropagation();
+  if (audioContext) {
+    if (audioSocket) audioSocket.close();
+    await audioContext.close();
+    audioContext = null; audioSocket = null; audioNode = null;
+    audioBtn.textContent = '开启车机声音';
+    return;
+  }
+  try {
+    audioContext = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+    await audioContext.audioWorklet.addModule('/audio-worklet.js?key=' + encodeURIComponent(accessKey));
+    audioNode = new AudioWorkletNode(audioContext, 'car-audio-player', { outputChannelCount:[2] });
+    audioNode.connect(audioContext.destination);
+    await audioContext.resume();
+    const audioProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    audioSocket = new WebSocket(audioProto + '//' + location.host + '/audio?key=' + encodeURIComponent(accessKey));
+    audioSocket.binaryType = 'arraybuffer';
+    audioSocket.onmessage = event => {
+      if (typeof event.data === 'string') {
+        try { if (JSON.parse(event.data).error) audioBtn.textContent = '手机音频采集失败'; } catch (error) {}
+        return;
+      }
+      if (event.data instanceof ArrayBuffer && audioNode) audioNode.port.postMessage(event.data, [event.data]);
+    };
+    audioSocket.onclose = () => { if (audioContext) audioBtn.textContent = '声音连接断开'; };
+    audioBtn.textContent = '车机声音已开启';
+  } catch (error) {
+    console.error('Audio startup failed:', error);
+    if (audioContext) await audioContext.close();
+    audioContext = null; audioNode = null;
+    audioBtn.textContent = '声音不可用，点按重试';
+  }
+});
+fullscreenBtn.addEventListener('pointerdown', e => e.stopPropagation(), { passive:true });
+fullscreenBtn.addEventListener('pointerup', e => e.stopPropagation(), { passive:true });
+fullscreenBtn.addEventListener('click', async e => {
+  e.preventDefault();
+  e.stopPropagation();
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (error) {
+    console.warn('Fullscreen request failed:', error);
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  fullscreenBtn.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+});
+
+// Draw decoded frames directly to avoid an extra full-frame GPU copy.
+const ctx = canvas.getContext('2d', {
+  alpha: false,
+  desynchronized: true
+});
+ctx.imageSmoothingEnabled = false;
+
+let decoder = null;
+let configured = false;
+let waitingForKey = true;
+let configData = null;
+let lastCodecStr = '';
+let ts = 0;
+let cachedRect = null;
+let renderedFrames = 0;
+let videoWidth = 0;
+let videoHeight = 0;
+setInterval(() => {
+  if (videoWidth) videoInfo.textContent = videoWidth + '×' + videoHeight + ' · ' + renderedFrames + ' 帧/秒';
+  renderedFrames = 0;
+}, 1000);
+
+function hex2(b) { return ('0' + b.toString(16)).slice(-2).toUpperCase(); }
+
+function updateRect() {
+  cachedRect = canvas.getBoundingClientRect();
+}
+window.addEventListener('resize', updateRect, { passive: true });
+
+function initDecoder() {
+  if (decoder) {
+    try { decoder.close(); } catch (e) {}
+  }
+  configured = false;
+  waitingForKey = true;
+  decoder = new VideoDecoder({
+    output(frame) {
+      // Only drop frames when queue exceeds 1 to balance 20ms latency with micro-jitter tolerance
+      if (decoder.decodeQueueSize > 1) {
+        frame.close();
+        return;
+      }
+      const fw = frame.displayWidth;
+      const fh = frame.displayHeight;
+      videoWidth = fw;
+      videoHeight = fh;
+      if (canvas.width !== fw || canvas.height !== fh) {
+        canvas.width = fw;
+        canvas.height = fh;
+        ctx.imageSmoothingEnabled = false;
+        updateRect();
+      }
+      ctx.drawImage(frame, 0, 0);
+      frame.close();
+      renderedFrames++;
+    },
+    error() {
+      // Auto-recover hardware decoder upon unexpected pipeline error using cached SPS/PPS
+      initDecoder();
+      if (lastCodecStr) {
+        try {
+          decoder.configure({ codec: lastCodecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
+          configured = true;
+        } catch (e) {}
+      }
+    }
+  });
+}
+
+initDecoder();
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) waitingForKey = true;
+});
+
+const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(proto + '//' + location.host + '/stream?key=' + encodeURIComponent(accessKey));
+ws.binaryType = 'arraybuffer';
+
+ws.onclose = () => { setTimeout(() => location.reload(), 1000); };
+ws.onopen = () => {};
+
+ws.onmessage = (ev) => {
+  if (typeof ev.data === 'string') {
+    try { JSON.parse(ev.data); } catch (e) {}
+    return;
+  }
+  const buf = new Uint8Array(ev.data);
+  if (buf.length < 2) return;
+  const isKey = buf[0] === 1;
+  const isConfig = buf[1] === 1;
+  const payload = buf.subarray(2);
+
+  if (isConfig) {
+    configData = payload;
+    let offset = 0;
+    while (offset < payload.length - 4) {
+      if (payload[offset] === 0 && payload[offset+1] === 0 && (payload[offset+2] === 1 || (payload[offset+2] === 0 && payload[offset+3] === 1))) {
+        const nalOffset = (payload[offset+2] === 1) ? offset + 3 : offset + 4;
+        const type = payload[nalOffset] & 0x1f;
+        // Parse SPS NAL unit (type 7) to configure WebCodecs hardware decoder dynamically
+        if (type === 7) {
+          const codecStr = 'avc1.' + hex2(payload[nalOffset+1]) + hex2(payload[nalOffset+2]) + hex2(payload[nalOffset+3]);
+          lastCodecStr = codecStr;
+          if (!configured || decoder.state === 'closed') {
+            if (decoder.state === 'closed') initDecoder();
+            try {
+              decoder.configure({ codec: codecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
+              configured = true;
+            } catch (e) {}
+          }
+          break;
+        }
+      }
+      offset++;
+    }
+    return;
+  }
+
+  if (!configured || decoder.state !== 'configured') return;
+
+  // Prevent 1-2s screen freeze during minor Wi-Fi jitter:
+  // Use threshold of 12 with clean decoder reset instead of prematurely dropping P-frames
+  if (decoder.decodeQueueSize > 6) {
+    try {
+      decoder.reset();
+      decoder.configure({ codec: lastCodecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
+    } catch (e) {}
+    waitingForKey = true;
+  }
+
+  if (waitingForKey) {
+    if (!isKey) return;
+    waitingForKey = false;
+  }
+
+  try {
+    ts += 16666;
+    if (isKey && configData) {
+      const merged = new Uint8Array(configData.length + payload.length);
+      merged.set(configData, 0);
+      merged.set(payload, configData.length);
+      decoder.decode(new EncodedVideoChunk({ type: 'key', timestamp: ts, data: merged }));
+    } else {
+      decoder.decode(new EncodedVideoChunk({ type: isKey ? 'key' : 'delta', timestamp: ts, data: payload }));
+    }
+  } catch (e) {
+    waitingForKey = true;
+  }
+};
+
+function mapCoord(e) {
+  const r = cachedRect || (cachedRect = canvas.getBoundingClientRect());
+  const w = canvas.width || 2560;
+  const h = canvas.height || 1116;
+  const scale = fillMode ? Math.max(r.width / w, r.height / h) : Math.min(r.width / w, r.height / h);
+  const realW = w * scale, realH = h * scale;
+  const offX = r.left + (r.width - realW) / 2;
+  const offY = r.top + (r.height - realH) / 2;
+  const rawX = (e.clientX - offX) / scale;
+  const rawY = (e.clientY - offY) / scale;
+  const x = Math.max(0, Math.min(w - 1, Math.round(rawX)));
+  const y = Math.max(0, Math.min(h - 1, Math.round(rawY)));
+  return { x, y, w, h, inside: rawX >= 0 && rawX < w && rawY >= 0 && rawY < h };
+}
+
+const activePointers = new Map();
+const usedSlots = new Set();
+
+function getSlot(id, isDown) {
+  if (activePointers.has(id)) return activePointers.get(id).slot;
+  if (!isDown) return -1;
+  for (let i = 0; i < 10; i++) {
+    if (!usedSlots.has(i)) {
+      usedSlots.add(i);
+      activePointers.set(id, { slot: i, lastX: -1, lastY: -1 });
+      return i;
+    }
+  }
+  return -1;
+}
+
+const touchBuf = new Uint8Array(22);
+const touchView = new DataView(touchBuf.buffer);
+touchBuf[0] = 2;
+
+function sendTouch(action, e) {
+  if (ws.readyState !== 1) return;
+  const slot = getSlot(e.pointerId, action === 0);
+  if (slot === -1) return;
+
+  const { x, y, w, h } = mapCoord(e);
+  const info = activePointers.get(e.pointerId);
+  if (action === 2 && info && x === info.lastX && y === info.lastY) return;
+  if (info) { info.lastX = x; info.lastY = y; }
+
+  touchBuf[1] = action;
+  touchView.setBigInt64(2, BigInt(slot));
+  touchView.setInt32(10, x);
+  touchView.setInt32(14, y);
+  touchView.setUint16(18, w);
+  touchView.setUint16(20, h);
+  ws.send(touchBuf);
+
+  if (action === 1) {
+    usedSlots.delete(slot);
+    activePointers.delete(e.pointerId);
+  }
+}
+
+window.addEventListener('pointerdown', (e) => {
+  if (!videoWidth) return;
+  updateRect();
+  if (!mapCoord(e).inside) return;
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  sendTouch(0, e);
+}, { passive: true });
+
+// Prioritize pointerrawupdate to bypass browser frame-aligned input coalescing
+const moveEvent = ('onpointerrawupdate' in window) ? 'pointerrawupdate' : 'pointermove';
+window.addEventListener(moveEvent, (e) => {
+  if (activePointers.has(e.pointerId)) sendTouch(2, e);
+}, { passive: true });
+
+window.addEventListener('pointerup',     (e) => { sendTouch(1, e); }, { passive: true });
+window.addEventListener('pointercancel', (e) => { sendTouch(1, e); }, { passive: true });
+</script>
+</body>
+</html>

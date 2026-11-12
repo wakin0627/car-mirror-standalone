@@ -1,0 +1,82 @@
+name: Android CI
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore: &docs-only
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
+      - 'NOTICE'
+  pull_request:
+    paths-ignore: *docs-only
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Check and build debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+        with:
+          gradle-cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Test diagnostic tools
+        run: python -m unittest discover -s tools -p 'test_*.py'
+      - name: Check and assemble
+        run: |
+          ./gradlew --no-daemon --console=plain spotlessCheck \
+            :app:testStandardDebugUnitTest :app:lintStandardDebug :app:assembleStandardDebug \
+            :app:testRemoteDebugUnitTest --tests 'com.mcarplay.app.bridge.*'
+      - name: Package APK and checksum
+        run: |
+          mkdir -p dist/debug
+          cp app/build/outputs/apk/standard/debug/app-standard-debug.apk \
+            "dist/debug/mcarplay-debug-${GITHUB_SHA:0:7}.apk"
+          cd dist/debug
+          sha256sum ./*.apk > SHA256SUMS.txt
+      - name: Upload debug APK
+        id: upload-apk
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcarplay-debug-${{ github.run_number }}
+          path: dist/debug/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Write job summary
+        env:
+          ARTIFACT_URL: ${{ steps.upload-apk.outputs.artifact-url }}
+        run: |
+          {
+            echo '### Debug APK'
+            echo
+            echo '| File | Size | SHA-256 |'
+            echo '| --- | --- | --- |'
+            for apk in dist/debug/*.apk; do
+              echo "| \`$(basename "$apk")\` | $(du -h "$apk" | cut -f1) | \`$(sha256sum "$apk" | cut -d' ' -f1)\` |"
+            done
+            echo
+            echo "[Download artifact]($ARTIFACT_URL) (expires in 14 days)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload check reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: check-reports-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/testStandardDebugUnitTest/
+            app/build/reports/tests/testRemoteDebugUnitTest/
+            app/build/reports/lint-results-standardDebug.*
+          if-no-files-found: ignore
+          retention-days: 14

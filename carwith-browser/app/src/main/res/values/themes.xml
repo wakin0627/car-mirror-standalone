@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 沉浸式系统栏：状态栏与底部手势条都透明，内容铺到屏幕边缘（EdgeToEdge.enable），
+         图标明暗跟随浅/深色。旧版把导航栏涂黑是为了和假息屏遮罩融合（MagicOS 默认给白色导航栏底，
+         2026-10-18）；遮罩是全屏覆盖窗口，系统栏透明时同样被盖住，不再需要黑色导航栏。 -->
+    <style name="Theme.CarPlaySender" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorBackground">@color/ui_bg</item>
+    </style>
+
+    <!-- 静默投屏跳板（audio/SilentProjectionActivity）：全透明、无动画、不抢焦点。
+         该 Activity 继承 android.app.Activity（不是 AppCompat），所以父主题只能用平台主题。 -->
+    <style name="Theme.CarPlaySender.SilentTranslucent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+    </style>
+</resources>

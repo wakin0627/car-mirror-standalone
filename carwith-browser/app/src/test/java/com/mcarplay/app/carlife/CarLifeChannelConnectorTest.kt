@@ -1,0 +1,217 @@
+package com.mcarplay.app.carlife
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.IOException
+import java.net.ConnectException
+import java.net.Socket
+
+class CarLifeChannelConnectorTest {
+    @Test
+    fun reportsFirstMissingPortWithoutAddingExtraProbesOrLeakingErrorText() {
+        var now = 0L
+        val ports = mutableListOf<Int>()
+        val logs = mutableListOf<String>()
+        val connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    ports += port
+                    throw ConnectException("PrivateCar 10.2.3.4 connection refused psk=SecretValue")
+                },
+                sleep = { now += 2 },
+                nowMs = { now },
+                log = logs::add,
+            )
+        assertThrows(CarLifeListenerTimeoutException::class.java) { connector.connectAll(timeoutMs = 3) }
+        val summary = connector.diagnosticSummary()
+        assertTrue(ports.isNotEmpty() && ports.all { it == 7240 })
+        assertTrue(summary, summary.contains("lastFailedPort=7240 lastFailure=REFUSED"))
+        assertTrue(summary, summary.contains("openedThisAttempt=none allConnectedOnce=false timedOut=true"))
+        assertFalse(logs.joinToString().contains("PrivateCar"))
+        assertFalse(logs.joinToString().contains("SecretValue"))
+        val frozen = connector.diagnosticSummary()
+        now += 10_000
+        assertEquals(frozen, connector.diagnosticSummary())
+        connector.close()
+    }
+
+    @Test
+    fun reportsOpenedPrefixWithoutClaimingSevenListenersReady() {
+        var now = 0L
+        val opened = mutableListOf<Socket>()
+        val connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    if (port == 9240) throw ConnectException("connection refused")
+                    Socket().also { opened += it }
+                },
+                sleep = { now += 2 },
+                nowMs = { now },
+            )
+        assertThrows(CarLifeListenerTimeoutException::class.java) { connector.connectAll(timeoutMs = 1) }
+        val summary = connector.diagnosticSummary()
+        assertTrue(summary, summary.contains("lastFailedPort=9240 lastFailure=REFUSED openedThisAttempt=7240,8240"))
+        assertTrue(summary, summary.contains("allConnectedOnce=false"))
+        assertTrue(opened.all { it.isClosed })
+        connector.close()
+    }
+
+    @Test
+    fun cancellationAtLastConnectionCannotPublishSuccessOrLeakSockets() {
+        val opened = mutableListOf<Socket>()
+        lateinit var connector: CarLifeChannelConnector
+        connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    if (port == 9440) connector.close()
+                    Socket().also { opened += it }
+                },
+            )
+        assertThrows(IOException::class.java) { connector.connectAll(timeoutMs = 100) }
+        assertTrue(opened.size == 7 && opened.all { it.isClosed })
+        assertTrue(connector.diagnosticSummary().contains("allConnectedOnce=false"))
+        assertTrue(connector.diagnosticSummary().contains("stopped=true"))
+        assertTrue(CarLifeChannel.entries.all { connector.socket(it) == null })
+    }
+
+    @Test
+    fun connectsAsClientToAllSevenListeners() {
+        val opened = mutableListOf<Int>()
+        val connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    opened += port
+                    Socket()
+                },
+            )
+        val sockets = connector.connectAll(timeoutMs = 100, retryDelayMs = 1)
+        assertEquals(CarLifeChannel.entries.map { it.port }, opened)
+        assertEquals(CarLifeChannel.entries.toSet(), sockets.keys)
+        CarLifeChannel.entries.forEach { assertNotNull(connector.socket(it)) }
+        connector.close()
+        assertTrue(sockets.values.all { it.isClosed })
+    }
+
+    @Test
+    fun partialAttemptIsClosedBeforeRetry() {
+        var failNext = true
+        val connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    val socket = Socket()
+                    if (failNext) {
+                        failNext = false
+                        socket.close()
+                        throw IOException("not ready")
+                    }
+                    socket
+                },
+                sleep = {},
+            )
+        val sockets = connector.connectAll(timeoutMs = 100, retryDelayMs = 1)
+        assertEquals(7, sockets.size)
+        assertEquals(7, sockets.keys.size)
+        connector.close()
+    }
+
+    @Test
+    fun existingSevenChannelsNeverRequestAnEntry() {
+        val connector = CarLifeChannelConnector(connect = { Socket() })
+        var requests = 0
+        connector.onAttemptFailed = { _, _ -> requests++ }
+        assertEquals(7, connector.connectAll(timeoutMs = 1_000).size)
+        assertEquals(0, requests)
+        connector.close()
+    }
+
+    @Test
+    fun closingDuringConnectDoesNotRequestAnEntryOrRetry() {
+        lateinit var connector: CarLifeChannelConnector
+        var requests = 0
+        connector =
+            CarLifeChannelConnector(
+                connect = {
+                    connector.close()
+                    throw ConnectException("cancelled")
+                },
+                sleep = { error("must not sleep after cancellation") },
+            )
+        connector.onAttemptFailed = { _, _ -> requests++ }
+        org.junit.Assert.assertThrows(IOException::class.java) { connector.connectAll(timeoutMs = 1_000) }
+        assertEquals(0, requests)
+    }
+
+    @Test
+    fun failedAttemptCanRequestTheEntryBeforeRetry() {
+        val failedAttempts = mutableListOf<Int>()
+        var requests = 0
+        val connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    if (requests == 0) throw ConnectException("listeners not started")
+                    Socket()
+                },
+                sleep = {},
+            )
+        connector.onAttemptFailed = { attempt, error ->
+            failedAttempts += attempt
+            assertTrue(error is ConnectException)
+            requests++
+        }
+
+        val sockets = connector.connectAll(timeoutMs = 100, retryDelayMs = 1)
+
+        assertEquals(listOf(1), failedAttempts)
+        assertEquals(7, sockets.size)
+        connector.close()
+    }
+
+    @Test
+    fun missingListenersFailWithoutClaimingSuccess() {
+        var now = 0L
+        val connector =
+            CarLifeChannelConnector(
+                connect = { throw IOException("connection refused") },
+                sleep = { now += 2 },
+                nowMs = { now },
+            )
+        // 超时有独立类型，会话据此区分“入口可能被拦截”与取消/其他失败。
+        assertThrows(CarLifeListenerTimeoutException::class.java) {
+            connector.connectAll(timeoutMs = 3, retryDelayMs = 1)
+        }
+        connector.close()
+    }
+
+    @Test
+    fun connectAllDoesNotLogSuccessBeforeEveryChannelIsConnected() {
+        val logs = mutableListOf<String>()
+        val connector =
+            CarLifeChannelConnector(
+                connect = { port ->
+                    if (port == CarLifeChannel.DATA.port) throw IOException("last listener not ready")
+                    Socket()
+                },
+                sleep = {},
+                nowMs =
+                    object {
+                        private var now = 0L
+
+                        fun read(): Long {
+                            now += 10
+                            return now - 10
+                        }
+                    }::read,
+                log = logs::add,
+            )
+
+        assertThrows(IOException::class.java) {
+            connector.connectAll(timeoutMs = 20, retryDelayMs = 1)
+        }
+        assertTrue(logs.none { it.contains("连接完成") })
+        connector.close()
+    }
+}
