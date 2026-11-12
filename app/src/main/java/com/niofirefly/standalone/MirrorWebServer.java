@@ -103,6 +103,7 @@ final class MirrorWebServer {
                     Client client = new Client(socket, in, out, path.equals("/audio"));
                     clients.add(client);
                     if (!client.audio) {
+                        MirrorService.state = "车机已连接";
                         if (configPacket != null) client.offerVideo(configPacket, true, false);
                         if (lastKeyframe != null) client.offerVideo(lastKeyframe, false, true);
                     }
@@ -116,15 +117,20 @@ final class MirrorWebServer {
                 out.write(response.getBytes(StandardCharsets.US_ASCII)); out.write(body); out.flush(); socket.close();
             } catch (Exception e) {
                 if (e instanceof SSLException) {
-                    Log.e(TAG, "TLS handshake failed", e);
-                    MirrorService.state = "TLS 握手失败：" + e.getClass().getSimpleName()
-                            + (e.getMessage() == null ? "" : " / " + e.getMessage());
+                    Log.w(TAG, "TLS request rejected from " + socket.getRemoteSocketAddress(), e);
+                    if (running && !hasVideoClient())
+                        MirrorService.state = "等待车机连接；最近一次请求 TLS 失败：" + e.getMessage();
                 } else {
                     Log.w(TAG, "Client disconnected: " + e.getMessage());
                 }
                 try { socket.close(); } catch (Exception ignored) {}
             }
         }, "car-mirror-http").start();
+    }
+
+    private boolean hasVideoClient() {
+        for (Client client : clients) if (!client.audio && client.open) return true;
+        return false;
     }
 
     private byte[] readAsset(String name) throws Exception {
@@ -221,6 +227,7 @@ final class MirrorWebServer {
         void close() {
             if (!open) return;
             open = false; clients.remove(this);
+            if (!audio && running && !hasVideoClient()) MirrorService.state = "服务已启动，等待车机";
             if (writer != null) writer.interrupt();
             try { socket.close(); } catch (Exception ignored) {}
         }

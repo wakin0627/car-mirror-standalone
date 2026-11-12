@@ -138,7 +138,7 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         ensureActive();
         new Thread(() -> readVideo(videoSocket), "car-mirror-video").start();
         new Thread(() -> readAudio(audioSocket), "car-mirror-audio").start();
-        state = "投屏已开启";
+        state = "服务已启动，等待车机";
     }
 
     private void ensureActive() throws Exception { if (stopping) throw new Exception("已取消连接"); }
