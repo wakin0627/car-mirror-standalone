@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import com.mcarplay.app.carlife.CarLifeLauncher
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -76,6 +77,9 @@ class BrowserBridgeActivity : Activity() {
         }
         button(root, "设置后台运行权限") {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
+        button(root, "允许后台弹出界面") {
+            CarLifeLauncher.openBackgroundStartSettings(this)
         }
         root.addView(label("车机浏览器打开网址，输入上方六位配对码，再点“开启车机声音”。车机画面由 CarWith 生成，手机屏幕可独立使用。首次打开本地 HTTPS 证书可能需要在车机确认。", 14, Color.GRAY))
         setContentView(ScrollView(this).apply { addView(root) })

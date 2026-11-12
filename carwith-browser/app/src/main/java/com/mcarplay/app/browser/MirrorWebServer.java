@@ -80,6 +80,11 @@ final class MirrorWebServer {
         if (key) lastKeyframe = packet;
         for (Client client : clients) if (!client.audio) client.offerVideo(packet, config, key);
     }
+    void resetVideo() {
+        configPacket = null;
+        lastKeyframe = null;
+        for (Client client : clients) if (!client.audio) client.close();
+    }
     void broadcastAudio(byte[] packet) {
         for (Client client : clients) if (client.audio) client.offerAudio(packet);
     }
