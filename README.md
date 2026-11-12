@@ -4,9 +4,9 @@ Android App 内置 scrcpy 3.1 服务端、HTTPS 网页、视频转发、触控�
 
 ## 下载
 
-下载 [CarMirrorStandalone-0.1.1-debug.apk](CarMirrorStandalone-0.1.1-debug.apk)，在 Android 手机上安装。此包为 **0.1.1 调试版原型**，车机 TLS 兼容性仍需实测。APK 的 SHA-256：`FC0B04616352C9ED3CE4B18598BF0C8CCE489AE8C0939DCF34E78928115D2337`。
+下载 [CarMirrorStandalone-0.1.2-debug.apk](CarMirrorStandalone-0.1.2-debug.apk)，在 Android 手机上安装。此包为 **0.1.2 调试版原型**，车机 TLS 兼容性仍需实测。APK 的 SHA-256：`1DF5757FFB6A827948AC416EF71E998CC87267AD553959E74BD9A8A4515B1E96`。
 
-0.1.1 默认不再修改手机的分辨率和 DPI，以免手机屏幕触点失准。需要车机 16:10 平板布局时，可手动勾选「强制平板比例」，但这可能再次影响手机触控。新版为旧浏览器增加 TLS RSA 密钥交换的兼容用途，明确选择此 App 的服务端证书，并在 App 状态和 Android 日志中记录 TLS 握手错误；是否解决特定车机的报错，需要在车机上验证。
+0.1.1 起默认不再修改手机的分辨率和 DPI，以免手机屏幕触点失准。需要车机 16:10 平板布局时，可手动勾选「强制平板比例」，但这可能再次影响手机触控。0.1.2 根据车机的 RSA 握手错误，改为在每台手机的 App 私有目录生成软件 TLS 密钥与证书，避开 Android Keystore 的 RSA 握手故障。证书为自签名，车机浏览器可能要求首次确认；是否解决这台车机的连接失败，还需在车机上验证。
 
 这是使用 Android 调试密钥签名的安装包。后续若改用正式签名，可能需要卸载此版后再安装；卸载会清除本 App 的数据。
 
