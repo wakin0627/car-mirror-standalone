@@ -86,11 +86,13 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         int maxSize = size.equals("800x1280") ? 1280 : size.equals("1600x2560") ? 2560 : 1920;
         String orientation = intent == null ? "@270" : intent.getStringExtra("orientation");
         if (!"@90".equals(orientation)) orientation = "@270";
+        boolean tabletMode = intent != null && intent.getBooleanExtra("tabletMode", false);
         rootScript = copyAsset("root-setup.sh");
         File jar = copyAsset("scrcpy-server.jar");
         root("sh " + rootScript.getAbsolutePath() + " install " + jar.getAbsolutePath());
         ensureActive();
-        root("sh " + rootScript.getAbsolutePath() + " start " + size + " 320 " + android.os.Process.myPid());
+        root("sh " + rootScript.getAbsolutePath() + " start " + size + " 320 " + android.os.Process.myPid()
+                + (tabletMode ? " 1" : " 0"));
         ensureActive();
         web = new MirrorWebServer(this, this);
         web.start();

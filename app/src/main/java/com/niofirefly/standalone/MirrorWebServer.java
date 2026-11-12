@@ -14,9 +14,13 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.security.PrivateKey;
+import java.security.Principal;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.MessageDigest;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.Map;
 import java.util.HashMap;
@@ -24,15 +28,18 @@ import java.util.Set;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.security.auth.x500.X500Principal;
 
 final class MirrorWebServer {
     interface Listener { void onTouch(byte[] data); String onCommand(String action); }
     private static final String TAG = "CarMirrorWeb";
-    private static final String ALIAS = "niofirefly-standalone-tls";
+    private static final String ALIAS = "niofirefly-standalone-tls-v2";
     private static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private final Context context;
     private final Listener listener;
@@ -84,10 +91,12 @@ final class MirrorWebServer {
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA", "AndroidKeyStore");
             long now = System.currentTimeMillis();
             KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(ALIAS,
-                    KeyProperties.PURPOSE_SIGN | KeyProperties.PURPOSE_VERIFY)
+                    KeyProperties.PURPOSE_SIGN | KeyProperties.PURPOSE_VERIFY
+                            | KeyProperties.PURPOSE_DECRYPT)
                     .setKeySize(2048)
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
                     .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
                     .setCertificateSubject(new X500Principal("CN=car-mirror"))
                     .setCertificateSerialNumber(BigInteger.valueOf(now))
                     .setCertificateNotBefore(new Date(now - 86400000L))
@@ -96,10 +105,29 @@ final class MirrorWebServer {
             generator.initialize(spec);
             generator.generateKeyPair();
         }
-        KeyManagerFactory managers = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        managers.init(store, null);
+        PrivateKey key = (PrivateKey) store.getKey(ALIAS, null);
+        Certificate[] storedChain = store.getCertificateChain(ALIAS);
+        if (key == null || storedChain == null || storedChain.length == 0)
+            throw new IllegalStateException("TLS certificate unavailable");
+        X509Certificate[] chain = new X509Certificate[storedChain.length];
+        for (int i = 0; i < storedChain.length; i++) chain[i] = (X509Certificate) storedChain[i];
+        X509ExtendedKeyManager manager = new X509ExtendedKeyManager() {
+            private String match(String type) { return "RSA".equals(type) ? ALIAS : null; }
+            @Override public String[] getClientAliases(String type, Principal[] issuers) { return null; }
+            @Override public String chooseClientAlias(String[] types, Principal[] issuers, Socket socket) { return null; }
+            @Override public String[] getServerAliases(String type, Principal[] issuers) {
+                return match(type) == null ? null : new String[]{ALIAS};
+            }
+            @Override public String chooseServerAlias(String type, Principal[] issuers, Socket socket) { return match(type); }
+            @Override public X509Certificate[] getCertificateChain(String alias) {
+                return ALIAS.equals(alias) ? chain.clone() : null;
+            }
+            @Override public PrivateKey getPrivateKey(String alias) { return ALIAS.equals(alias) ? key : null; }
+            @Override public String chooseEngineClientAlias(String[] types, Principal[] issuers, SSLEngine engine) { return null; }
+            @Override public String chooseEngineServerAlias(String type, Principal[] issuers, SSLEngine engine) { return match(type); }
+        };
         SSLContext tls = SSLContext.getInstance("TLS");
-        tls.init(managers.getKeyManagers(), null, null);
+        tls.init(new KeyManager[]{manager}, null, null);
         return tls;
     }
 
@@ -141,7 +169,13 @@ final class MirrorWebServer {
                 String response = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
                 out.write(response.getBytes(StandardCharsets.US_ASCII)); out.write(body); out.flush(); socket.close();
             } catch (Exception e) {
-                Log.w(TAG, "Client disconnected: " + e.getMessage());
+                if (e instanceof SSLException) {
+                    Log.e(TAG, "TLS handshake failed", e);
+                    MirrorService.state = "TLS 握手失败：" + e.getClass().getSimpleName()
+                            + (e.getMessage() == null ? "" : " / " + e.getMessage());
+                } else {
+                    Log.w(TAG, "Client disconnected: " + e.getMessage());
+                }
                 try { socket.close(); } catch (Exception ignored) {}
             }
         }, "car-mirror-http").start();

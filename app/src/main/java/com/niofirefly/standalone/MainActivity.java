@@ -31,6 +31,7 @@ public final class MainActivity extends Activity {
     private TextView address;
     private Spinner quality;
     private CheckBox flip;
+    private CheckBox tabletMode;
     private final Runnable refreshTask = new Runnable() {
         @Override public void run() {
             if (status != null) status.setText(MirrorService.state);
@@ -60,6 +61,7 @@ public final class MainActivity extends Activity {
             Intent start = new Intent(this, MirrorService.class).setAction(MirrorService.ACTION_START);
             start.putExtra("size", size);
             start.putExtra("orientation", flip.isChecked() ? "@90" : "@270");
+            start.putExtra("tabletMode", tabletMode.isChecked());
             startForegroundService(start);
             status.setText("正在启动");
         });
@@ -81,6 +83,10 @@ public final class MainActivity extends Activity {
         ArrayAdapter<String> modesAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         quality.setAdapter(modesAdapter); root.addView(quality);
         flip = new CheckBox(this); flip.setText("画面倒置时使用此方向"); root.addView(flip);
+        tabletMode = new CheckBox(this);
+        tabletMode.setText("强制平板比例（可能导致手机触屏失准）");
+        tabletMode.setChecked(false);
+        root.addView(tabletMode);
         root.addView(label("首次连接会请求 Root 授权。车机网页需要点一次“开启车机声音”；断开后会恢复手机原有显示设置。", 14, Color.GRAY));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
