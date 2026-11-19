@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### MagicDesk 独立屏幕实验版 0.1.11
+
+[下载 CarDesktop-0.1.11-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.11-test/CarDesktop-0.1.11-test.apk)。需另装 [MagicDesk 官方版](https://github.com/mekhontsev/magicdesk/releases/tag/v2.2.8)：在 MagicDesk 设置 Root 和桌面环境，创建虚拟屏并在该屏启动桌面，记录其屏幕 ID。在本 App 勾选「连接 MagicDesk 已有屏幕（实验）」并填写 ID，连接车机 Wi-Fi，在车机浏览器打开显示的网址。
+
+本模式捕获已有屏幕，不能保证 HyperOS 设备允许捕获或远程触控；画面、真实窗口、音频及性能仍需实机验证。屏幕 ID 随虚拟屏重建可能变化。不要同时开启其他占用端口的投屏程序。网页「应用列表」是本 App 的旧启动器，MagicDesk 桌面内请使用它自己的开始菜单。视频目前限制 30 FPS。APK SHA-256：`7232BB09119D5C5E85EE8E16868CA4D4381B8C4D9B0E546D5E68266D2FF62A21`。
+
 ### 车机桌面实验版 0.1.10
 
 [下载 CarDesktop-0.1.10-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.10-test/CarDesktop-0.1.10-test.apk)。本版改进触屏操作：底栏固定提供「返回」「桌面」「应用」及当前应用切换按钮；应用列表可随时打开，窗口占满时可选择替换其中一个；窗口标题栏按钮也已加大。画质、声音及连接选项位于「更多」。

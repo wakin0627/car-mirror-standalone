@@ -17,6 +17,8 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
+import android.text.InputType;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -41,6 +43,8 @@ public final class MainActivity extends Activity {
     private CheckBox virtualMode;
     private CheckBox windowDecorations;
     private CheckBox splitMode;
+    private CheckBox existingDisplay;
+    private EditText displayId;
     private Spinner leftApp, rightApp;
     private List<ResolveInfo> launchableApps;
     private final Runnable refreshTask = new Runnable() {
@@ -72,7 +76,14 @@ public final class MainActivity extends Activity {
             if (MirrorService.active || SplitMirrorService.active) {
                 status.setText("请先断开当前连接"); return;
             }
-            Intent start = new Intent(this, splitMode.isChecked() ? SplitMirrorService.class : MirrorService.class).setAction(MirrorService.ACTION_START);
+            int selectedDisplay = -1;
+            if (existingDisplay.isChecked()) {
+                try { selectedDisplay = Integer.parseInt(displayId.getText().toString().trim()); }
+                catch (NumberFormatException e) { status.setText("请输入 MagicDesk 显示的屏幕 ID"); return; }
+                if (selectedDisplay < 1 || selectedDisplay > 65535) { status.setText("屏幕 ID 应为 1 到 65535"); return; }
+            }
+            Intent start = new Intent(this, !existingDisplay.isChecked() && splitMode.isChecked() ? SplitMirrorService.class : MirrorService.class).setAction(MirrorService.ACTION_START);
+            start.putExtra("existingDisplayId", selectedDisplay);
             start.putExtra("size", size);
             start.putExtra("orientation", flip.isChecked() ? "@90" : "@270");
             start.putExtra("tabletMode", tabletMode.isChecked());
@@ -97,9 +108,28 @@ public final class MainActivity extends Activity {
         button(root, "打开 Wi-Fi 设置", v -> startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         button(root, "设置后台运行", v -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 android.net.Uri.parse("package:" + getPackageName()))));
+        button(root, "打开 MagicDesk", v -> {
+            Intent launch = getPackageManager().getLaunchIntentForPackage("io.github.mekhontsev.magicdesk");
+            if (launch != null) startActivity(launch);
+            else status.setText("请先安装 MagicDesk 官方 App");
+        });
         button(root, "检查更新", v -> updates.check());
         updateStatus = label("", 14, Color.rgb(38, 90, 160)); root.addView(updateStatus);
         updates = new UpdateManager(this, updateStatus);
+        existingDisplay = new CheckBox(this);
+        existingDisplay.setText("连接 MagicDesk 已有屏幕（实验）");
+        root.addView(existingDisplay);
+        displayId = new EditText(this);
+        displayId.setSingleLine(true);
+        displayId.setInputType(InputType.TYPE_CLASS_NUMBER);
+        displayId.setHint("MagicDesk 显示的屏幕 ID，例如 3");
+        displayId.setVisibility(View.GONE);
+        root.addView(displayId);
+        existingDisplay.setOnCheckedChangeListener((button, checked) -> {
+            displayId.setVisibility(checked ? View.VISIBLE : View.GONE);
+            if (checked) splitMode.setChecked(false);
+        });
+        root.addView(label("先在 MagicDesk 创建虚拟屏并启动桌面，再填写屏幕 ID。兼容性和触控需实测。", 14, Color.GRAY));
         splitMode = new CheckBox(this);
         splitMode.setText("双应用桌面（实验）");
         root.addView(splitMode);
@@ -115,7 +145,7 @@ public final class MainActivity extends Activity {
         quality.setAdapter(modesAdapter); root.addView(quality);
         splitMode.setOnCheckedChangeListener((button, checked) -> {
             splitOptions.setVisibility(checked ? View.VISIBLE : View.GONE);
-            if (checked) quality.setSelection(1);
+            if (checked) { quality.setSelection(1); existingDisplay.setChecked(false); }
         });
         root.addView(label("车机屏幕比例", 16, Color.DKGRAY));
         carRatio = new Spinner(this);

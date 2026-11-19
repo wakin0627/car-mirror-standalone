@@ -93,8 +93,11 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         int bitRate = maxSize == 1280 ? 3_000_000 : maxSize == 2560 ? 8_000_000 : 5_000_000;
         String orientation = intent == null ? "@270" : intent.getStringExtra("orientation");
         if (!"@90".equals(orientation)) orientation = "@270";
-        boolean tabletMode = intent != null && intent.getBooleanExtra("tabletMode", false);
-        virtualMode = intent == null || intent.getBooleanExtra("virtualMode", true);
+        int existingDisplayId = intent == null ? -1 : intent.getIntExtra("existingDisplayId", -1);
+        if (existingDisplayId < -1 || existingDisplayId == 0 || existingDisplayId > 65535) throw new Exception("屏幕 ID 无效");
+        boolean tabletMode = existingDisplayId < 0 && intent != null && intent.getBooleanExtra("tabletMode", false);
+        virtualMode = existingDisplayId > 0 || intent == null || intent.getBooleanExtra("virtualMode", true);
+        if (existingDisplayId > 0) carDisplayId = existingDisplayId;
         boolean windowDecorations = intent != null && intent.getBooleanExtra("windowDecorations", false);
         int ratio = intent == null ? 0 : intent.getIntExtra("carRatio", 0);
         int virtualHeight = ratio == 1 ? maxSize * 9 / 16 : ratio == 2 ? maxSize / 2 : maxSize * 5 / 8;
@@ -121,7 +124,8 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         wakeLock.acquire();
         String command = "su shell -c 'CLASSPATH=" + ROOT_DIR + "/scrcpy-server.jar /system/bin/app_process "
                 + "/system/bin com.genymobile.scrcpy.Server 3.1 log_level=info scid=01234567 "
-                + (virtualMode ? "new_display=" + maxSize + "x" + virtualHeight + "/240 vd_system_decorations=" + windowDecorations :
+                + (existingDisplayId > 0 ? "display_id=" + existingDisplayId + " max_size=" + maxSize :
+                   virtualMode ? "new_display=" + maxSize + "x" + virtualHeight + "/240 vd_system_decorations=" + windowDecorations :
                         "max_size=" + maxSize + " capture_orientation=" + orientation)
                 + " video_bit_rate=" + bitRate + " max_fps=30 "
                 + "audio=true audio_source=output audio_codec=raw control=true cleanup=false "
