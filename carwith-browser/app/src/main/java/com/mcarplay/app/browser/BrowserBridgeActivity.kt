@@ -32,7 +32,7 @@ class BrowserBridgeActivity : Activity() {
         object : Runnable {
             override fun run() {
                 status.text = BrowserBridgeService.state
-                address.text = currentUrl() ?: "请先连接车机 Wi-Fi"
+                address.text = currentUrl() ?: "请先开启手机热点或连接 Wi-Fi"
                 handler.postDelayed(this, 1000)
             }
         }
@@ -45,8 +45,8 @@ class BrowserBridgeActivity : Activity() {
                 setPadding(dp(24), dp(30), dp(24), dp(24))
                 setBackgroundColor(Color.rgb(247, 248, 250))
             }
-        root.addView(label("CarWith 网页桥接", 27, Color.rgb(24, 32, 45)))
-        root.addView(label("小米 13 连接车机 Wi-Fi 后，点连接；车机浏览器打开下方网址。", 16, Color.DKGRAY))
+        root.addView(label("FT 网页桥接", 27, Color.rgb(24, 32, 45)))
+        root.addView(label("先打开 FT 并启动 Hotspot 模式；车机连接手机热点后，在此点连接。", 16, Color.DKGRAY))
         status = label("未连接", 19, Color.rgb(38, 90, 160)).also(root::addView)
         address = label("", 18, Color.BLACK).also(root::addView)
         pin = label("配对码：${BrowserBridgeService.pin}", 20, Color.rgb(38, 90, 160)).also(root::addView)
@@ -54,7 +54,11 @@ class BrowserBridgeActivity : Activity() {
         quality = spinner("低延迟：宽 1280", "标准：宽 1920", "萤火虫原屏：2560×1600（16:10）").also(root::addView)
         root.addView(label("车机比例", 16, Color.DKGRAY))
         ratio = spinner("16:10", "16:9", "2:1").also(root::addView)
-        button(root, "连接，显示 CarWith 画面") {
+        button(root, "打开 FT") {
+            val launch = packageManager.getLaunchIntentForPackage("app.ft")
+            if (launch != null) startActivity(launch) else status.text = "未安装 FT，请先安装官方 FT"
+        }
+        button(root, "连接，显示 FT 画面") {
             if (currentUrl() == null) {
                 startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
                 return@button
@@ -72,7 +76,7 @@ class BrowserBridgeActivity : Activity() {
         button(root, "复制车机网址") {
             currentUrl()?.let { url ->
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
-                    .setPrimaryClip(ClipData.newPlainText("CarWith 网页桥接", url))
+                    .setPrimaryClip(ClipData.newPlainText("FT 网页桥接", url))
             }
         }
         button(root, "设置后台运行权限") {
@@ -81,7 +85,7 @@ class BrowserBridgeActivity : Activity() {
         button(root, "允许后台弹出界面") {
             CarLifeLauncher.openBackgroundStartSettings(this)
         }
-        root.addView(label("车机浏览器打开网址，输入上方六位配对码，再点“开启车机声音”。车机画面由 CarWith 生成，手机屏幕可独立使用。首次打开本地 HTTPS 证书可能需要在车机确认。", 14, Color.GRAY))
+        root.addView(label("车机浏览器打开网址，输入上方六位配对码，再点“开启车机声音”。车机画面由 FT 生成，手机屏幕可独立使用。首次打开本地 HTTPS 证书可能需要在车机确认。", 14, Color.GRAY))
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
@@ -98,9 +102,11 @@ class BrowserBridgeActivity : Activity() {
     private fun currentUrl(): String? {
         return try {
             val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
-            while (interfaces.hasMoreElements()) {
-                val network = interfaces.nextElement()
-                if (!network.name.startsWith("wlan") || !network.isUp) continue
+            val networks = java.util.Collections.list(interfaces).sortedBy { network ->
+                if (listOf("swlan", "ap", "softap", "wlan1", "wlan2", "wifi_ap").any { network.name.startsWith(it) }) 0 else 1
+            }
+            for (network in networks) {
+                if (!network.isUp || !listOf("wlan", "swlan", "ap", "softap", "wifi_ap").any { network.name.startsWith(it) }) continue
                 val addresses = network.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val ip = addresses.nextElement()

@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### FT 网页桥接实验版
+
+[下载 FTBrowser-0.1.4-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/ft-browser-v0.1.4-test/FTBrowser-0.1.4-test.apk)。本版需要另行安装[官方 FT](https://github.com/OneAboveAll1964/ft-app/releases/tag/3.9.68)，没有内置 FT。先在 FT 选择 Hotspot 并启动，让车机连接手机热点，再在桥接 App 点连接；车机浏览器打开桥接 App 显示的地址，输入配对码。FT 自己启动热点可能影响手机原有 Wi-Fi 连接。FT 的 Root、权限和分屏功能须先按 FT 的流程配置。
+
+这是早期协议实验版：桥接器通过本机六路 CarLife 连接接收 FT 画面和声音、转发浏览器触控。已做模拟协议测试（握手、视频、音频、触控）及 Android 构建检查，尚无小米 13 Ultra 或车机实测。效果是 FT 自带桌面与双应用分屏，不是 DeX 自由窗口。该包与旧 CarWith 网页桥接同包名，可覆盖兼容签名的旧版；与 0.1.10 车机桌面为不同 App。APK SHA-256：`760148C4482FAB3B2F425945CDB972AB7D35F78D1C13CC65503D7346DA7BE3C6`。
+
 ### 车机桌面实验版 0.1.10
 
 [下载 CarDesktop-0.1.10-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.10-test/CarDesktop-0.1.10-test.apk)。本版改进触屏操作：底栏固定提供「返回」「桌面」「应用」及当前应用切换按钮；应用列表可随时打开，窗口占满时可选择替换其中一个；窗口标题栏按钮也已加大。画质、声音及连接选项位于「更多」。

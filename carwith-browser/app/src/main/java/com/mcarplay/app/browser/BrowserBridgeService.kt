@@ -14,7 +14,7 @@ import com.mcarplay.app.audio.AudioDuckingMixer
 import com.mcarplay.app.audio.PcmResampler
 import com.mcarplay.app.carlife.CarLifeAudioEvent
 import com.mcarplay.app.carlife.CarLifeChannel
-import com.mcarplay.app.carlife.CarLifeSession
+import com.mcarplay.app.carlife.FtBrowserSession
 import com.mcarplay.app.carlife.CarLifeVideoAccessUnit
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -48,7 +48,7 @@ class BrowserBridgeService :
     private var web: MirrorWebServer? = null
 
     @Volatile
-    private var session: CarLifeSession? = null
+    private var session: FtBrowserSession? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
@@ -79,7 +79,7 @@ class BrowserBridgeService :
         if (starting || web != null) return START_STICKY
         starting = true
         showNotification()
-        state = "正在启动 CarWith 网页桥接"
+        state = "正在启动 FT 网页桥接"
         val width = intent?.getIntExtra("width", 1280)?.takeIf { it in 640..2560 } ?: 1280
         val ratio = intent?.getIntExtra("ratio", 0) ?: 0
         val height =
@@ -109,7 +109,7 @@ class BrowserBridgeService :
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CarWithBrowser:bridge").also { it.acquire() }
             val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
             wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "CarWithBrowser:wifi").also { it.acquire() }
-            startCarWithSession(width, height)
+            startFtSession(width, height)
             if (stopping) return
             audioFlusher =
                 Thread({
@@ -132,35 +132,25 @@ class BrowserBridgeService :
         }
     }
 
-    private fun startCarWithSession(width: Int, height: Int) {
-            val client =
-                CarLifeSession(
-                    application = application,
-                    onAccessUnit = ::relayVideo,
-                    onAudioEvent = ::relayAudio,
-                    onEnded = { reason ->
-                        if (!stopping) {
-                            state = "CarWith 连接中断，正在重连：$reason"
-                            videoReady = false
-                            videoFrames = 0
-                            lastCodecConfig = null
-                            web?.resetVideo()
-                            synchronized(audioLock) { resamplers.clear(); mixer.reset() }
-                            val delayMs = (5000L shl retryCount.coerceAtMost(3)).coerceAtMost(30000L)
-                            retryCount++
-                            Thread({
-                                try { Thread.sleep(delayMs) } catch (_: InterruptedException) { return@Thread }
-                                if (!stopping) startCarWithSession(width, height)
-                            }, "carwith-browser-reconnect").start()
-                        }
-                    },
-                    log = { message -> Log.i("CarWithBrowser", message) },
-                    requestedVideoSize = width to height,
-                    requestedFps = 60,
-                )
-            session = client
-            if (stopping) return
-            if (client.start() && !stopping) state = "等待 CarWith 画面；车机可打开网页"
+    private fun startFtSession(width: Int, height: Int) {
+        val client = FtBrowserSession(width, height, ::relayVideo, ::relayAudio) { reason ->
+            if (!stopping) {
+                state = "FT 连接中断，正在重连：$reason"
+                videoReady = false
+                videoFrames = 0
+                lastCodecConfig = null
+                web?.resetVideo()
+                synchronized(audioLock) { resamplers.clear(); mixer.reset() }
+                Thread({
+                    try { Thread.sleep(3000) } catch (_: InterruptedException) { return@Thread }
+                    if (!stopping) startFtSession(width, height)
+                }, "ft-browser-reconnect").start()
+            }
+        }
+        session = client
+        if (stopping) return
+        state = "等待 FT：请在 FT 中选择 Hotspot 并启动服务"
+        client.start()
     }
 
     private fun relayVideo(unit: CarLifeVideoAccessUnit) {
@@ -178,7 +168,7 @@ class BrowserBridgeService :
         if (videoFrames == 1L) {
             retryCount = 0
             videoReady = true
-            state = if (browserConnected) "车机已连接" else "CarWith 画面已接收，等待车机浏览器"
+            state = if (browserConnected) "车机已连接" else "FT 画面已接收，等待车机浏览器"
         }
     }
 
@@ -247,7 +237,7 @@ class BrowserBridgeService :
             Notification
                 .Builder(this, "carwith_browser")
                 .setSmallIcon(android.R.drawable.ic_media_play)
-                .setContentTitle("CarWith 网页桥接运行中")
+                .setContentTitle("FT 网页桥接运行中")
                 .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause, "断开", pending).build())
                 .build()
         startForeground(448, notification)
