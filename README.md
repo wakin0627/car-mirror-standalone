@@ -6,7 +6,13 @@
 
 ## 原有屏幕镜像版
 
-### 车机桌面实验版
+### 双应用桌面实验版
+
+[下载 CarDesktop-0.1.8-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.8-test/CarDesktop-0.1.8-test.apk)。此版新增「双应用桌面」：在手机勾选后分别选择左右应用，连接车机 Wi-Fi 并授予 Root；在车机浏览器打开手机显示的网址、输入手机显示的六位配对码。网页的两个应用窗口可以通过标题栏拖动，通过右下角调整显示大小，每个窗口有自己的返回按钮。点「开启车机声音」播放手机的一路系统音频。
+
+实现方式参考 [FT 的独立屏分屏思路](https://github.com/OneAboveAll1964/ft-app)，使用内置的 scrcpy 服务分别创建两个虚拟屏；没有打包 FT。网页调整窗口大小只缩放显示画面，暂不改变应用的虚拟屏尺寸，可能出现留边。此版本不使用 CarWith；请先断开 CarWith 网页桥接。已有应用的任务可能被 Android 移到车机虚拟屏；断开后虚拟屏上的应用可能关闭或返回手机。画面、触控、音频与后台稳定性均需在小米 13 Ultra 和车机实测，受系统、视频编码器及应用限制。车机浏览器需要 WebCodecs、AudioWorklet 和接受手机生成的 HTTPS 证书。APK 会覆盖旧的独立屏幕 App，与 CarWith 桥接 App 分开。SHA-256：`398B0343DF9E25421ECE3928235E5B9FE4FED91B2A941DD145C55FF1C339DB4E`。
+
+### 单屏窗口实验版
 
 [下载 CarDesktop-0.1.7-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.7-test/CarDesktop-0.1.7-test.apk)。此版基于本仓库的独立屏幕镜像版，使用 scrcpy 在手机创建车机虚拟屏；并非 CarWith 界面。先断开 CarWith 网页桥接，打开此版选择「车机独立屏幕」、连接后在车机浏览器打开网址。点网页「应用列表」，选「左侧窗口」并打开地图，再点「应用列表」，选「右侧窗口」并打开视频。
 

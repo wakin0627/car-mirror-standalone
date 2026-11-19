@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>车机双应用</title>
+<style>
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111722;color:#fff;font:14px sans-serif;touch-action:none}
+#toolbar{height:44px;display:flex;align-items:center;gap:8px;padding:4px 8px;background:#202938;position:relative;z-index:9999}
+button{border:1px solid #aabbcc66;background:#26374c;color:#fff;border-radius:7px;padding:6px 10px;font:14px sans-serif}
+#desktop{height:calc(100% - 44px);position:relative;overflow:hidden}
+.window{position:absolute;top:0;height:100%;width:50%;background:#000;border:1px solid #5b7188;display:flex;flex-direction:column;min-width:160px;min-height:130px}
+#left{left:0}#right{left:50%}.bar{height:38px;flex:none;background:#24364b;padding:4px;cursor:move;touch-action:none;display:flex;align-items:center;gap:8px}.bar span{margin-left:auto;color:#bed0e3;font-size:12px}
+canvas{display:block;width:100%;height:100%;object-fit:contain;touch-action:none}.screen{flex:1;min-height:0;position:relative}.resize{position:absolute;right:0;bottom:0;width:27px;height:27px;touch-action:none;cursor:nwse-resize;background:linear-gradient(135deg,transparent 45%,#aab9c9 46%,#aab9c9 50%,transparent 51%,transparent 62%,#aab9c9 63%,#aab9c9 68%,transparent 69%)}
+</style></head><body><div id="toolbar"><button id="reset">排列窗口</button><button id="audio">开启车机声音</button><button id="full">全屏</button><button id="disconnect">断开</button><span id="message">正在连接</span></div>
+<div id="desktop"><section class="window" id="left"><div class="bar"><button class="back">返回</button>左侧应用 · 拖动移动 <span>等待画面</span></div><div class="screen"><canvas></canvas></div><div class="resize"></div></section><section class="window" id="right"><div class="bar"><button class="back">返回</button>右侧应用 · 拖动移动 <span>等待画面</span></div><div class="screen"><canvas></canvas></div><div class="resize"></div></section></div>
+<script>
+const key = new URLSearchParams(location.search).get('key') || '';
+const suffix = '?key=' + encodeURIComponent(key);
+const wsPrefix = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+const desktop = document.getElementById('desktop'), message = document.getElementById('message');
+let stack = 2;
+function bounded(v, min, max){ return Math.max(min, Math.min(max, v)); }
+function resetWindows(){ for(const [i,w] of [...document.querySelectorAll('.window')].entries()){ w.style.left=(i*50)+'%';w.style.top='0';w.style.width='50%';w.style.height='100%'; } }
+document.getElementById('reset').onclick = resetWindows;
+for(const w of document.querySelectorAll('.window')){
+  w.addEventListener('pointerdown',()=>{ w.style.zIndex=++stack; });
+  function movement(handle, resize){ handle.addEventListener('pointerdown',e=>{e.preventDefault();handle.setPointerCapture(e.pointerId);const box=w.getBoundingClientRect(), area=desktop.getBoundingClientRect(), x=e.clientX,y=e.clientY;
+    const initial={left:box.left-area.left,top:box.top-area.top,width:box.width,height:box.height};
+    const move=ev=>{const dx=ev.clientX-x,dy=ev.clientY-y;if(resize){w.style.width=bounded(initial.width+dx,160,area.width-initial.left)+'px';w.style.height=bounded(initial.height+dy,130,area.height-initial.top)+'px';}else{w.style.left=bounded(initial.left+dx,0,area.width-initial.width)+'px';w.style.top=bounded(initial.top+dy,0,area.height-initial.height)+'px';}};
+    const end=()=>{handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',end);handle.removeEventListener('pointercancel',end);};handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);
+  });}
+  movement(w.querySelector('.bar'),false);movement(w.querySelector('.resize'),true);
+}
+function player(id,path){
+  const w=document.getElementById(id), canvas=w.querySelector('canvas'), ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+  let decoder,configured=false,waiting=true,config=null,codec='',timestamp=0,ws,active=null,frames=0;
+  const label=w.querySelector('.bar span');setInterval(()=>{ label.textContent=(canvas.width&&canvas.height?canvas.width+'×'+canvas.height+' · ':'')+frames+' 帧/秒';frames=0; },1000);
+  const hex=x=>('0'+x.toString(16)).slice(-2).toUpperCase();
+  function init(){if(decoder)try{decoder.close()}catch(e){};configured=false;waiting=true;decoder=new VideoDecoder({output(frame){if(canvas.width!==frame.displayWidth||canvas.height!==frame.displayHeight){canvas.width=frame.displayWidth;canvas.height=frame.displayHeight}ctx.drawImage(frame,0,0);frame.close();frames++;},error(){init();if(codec)try{decoder.configure({codec,optimizeForLatency:true,hardwareAcceleration:'prefer-hardware'});configured=true}catch(e){}}});}
+  function connect(){init();ws=new WebSocket(wsPrefix+path+suffix);ws.binaryType='arraybuffer';ws.onopen=()=>{message.textContent='已连接';};ws.onclose=()=>{message.textContent='连接中断，正在重试';setTimeout(connect,1500)};
+    ws.onmessage=e=>{if(typeof e.data==='string'){try{const info=JSON.parse(e.data);if(info.status)message.textContent=info.status}catch(err){}return}const bytes=new Uint8Array(e.data);if(bytes.length<3)return;const isKey=bytes[0]===1,isConfig=bytes[1]===1,payload=bytes.subarray(2);
+      if(isConfig){config=payload;for(let i=0;i<payload.length-7;i++){if(payload[i]===0&&payload[i+1]===0&&(payload[i+2]===1||(payload[i+2]===0&&payload[i+3]===1))){const p=payload[i+2]===1?i+3:i+4;if((payload[p]&31)===7){codec='avc1.'+hex(payload[p+1])+hex(payload[p+2])+hex(payload[p+3]);try{decoder.configure({codec,optimizeForLatency:true,hardwareAcceleration:'prefer-hardware'});configured=true;waiting=true}catch(err){label.textContent='视频解码不支持'}break}}}return;}
+      if(!configured)return;if(decoder.decodeQueueSize>6){try{decoder.reset();decoder.configure({codec,optimizeForLatency:true,hardwareAcceleration:'prefer-hardware'})}catch(err){}waiting=true;}
+      if(waiting&&!isKey)return;if(isKey)waiting=false;try{timestamp+=33333;if(isKey&&config){const data=new Uint8Array(config.length+payload.length);data.set(config);data.set(payload,config.length);decoder.decode(new EncodedVideoChunk({type:'key',timestamp,data}));}else decoder.decode(new EncodedVideoChunk({type:isKey?'key':'delta',timestamp,data:payload}));}catch(err){waiting=true;}
+    };
+  }
+  if(!window.VideoDecoder){label.textContent='浏览器不支持视频解码';return}connect();
+  const back=w.querySelector('.back');
+  for(const name of ['pointerdown','pointerup','pointermove'])back.addEventListener(name,e=>e.stopPropagation());
+  back.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({action:'back'}));});
+  function touch(action,e){if(!ws||ws.readyState!==WebSocket.OPEN||!canvas.width||!canvas.height)return false;const r=canvas.getBoundingClientRect(),scale=Math.min(r.width/canvas.width,r.height/canvas.height);if(!scale)return false;const ox=r.left+(r.width-canvas.width*scale)/2,oy=r.top+(r.height-canvas.height*scale)/2;
+    const rawX=(e.clientX-ox)/scale,rawY=(e.clientY-oy)/scale;if(action===0&&(rawX<0||rawY<0||rawX>=canvas.width||rawY>=canvas.height))return false;
+    const x=bounded(Math.round(rawX),0,canvas.width-1),y=bounded(Math.round(rawY),0,canvas.height-1),data=new ArrayBuffer(22),v=new DataView(data);v.setUint8(0,2);v.setUint8(1,action);v.setBigInt64(2,0n);v.setInt32(10,x);v.setInt32(14,y);v.setUint16(18,canvas.width);v.setUint16(20,canvas.height);ws.send(data);return true;
+  }
+  canvas.addEventListener('pointerdown',e=>{e.preventDefault();if(active!==null||!touch(0,e))return;active=e.pointerId;try{canvas.setPointerCapture(e.pointerId)}catch(err){}});
+  canvas.addEventListener('pointermove',e=>{if(active===e.pointerId)touch(2,e)});
+  for(const name of ['pointerup','pointercancel'])canvas.addEventListener(name,e=>{if(active===e.pointerId){touch(1,e);active=null}});
+  return ()=>ws;
+}
+const left=player('left','/stream'), right=player('right','/stream2');
+document.getElementById('disconnect').onclick=()=>{const ws=left&&left();if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({action:'disconnect'}));};
+document.getElementById('full').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen().catch(()=>{});};
+let audioContext=null,audioSocket=null;
+document.getElementById('audio').onclick=async e=>{const button=e.currentTarget;if(audioContext){if(audioSocket)audioSocket.close();await audioContext.close();audioContext=null;audioSocket=null;button.textContent='开启车机声音';return;}
+ try{audioContext=new AudioContext({sampleRate:48000,latencyHint:'interactive'});await audioContext.audioWorklet.addModule('/audio-worklet.js'+suffix);const node=new AudioWorkletNode(audioContext,'car-audio-player',{outputChannelCount:[2]});node.connect(audioContext.destination);await audioContext.resume();audioSocket=new WebSocket(wsPrefix+'/audio'+suffix);audioSocket.binaryType='arraybuffer';audioSocket.onmessage=ev=>{if(ev.data instanceof ArrayBuffer)node.port.postMessage(ev.data,[ev.data]);else{try{if(JSON.parse(ev.data).error)button.textContent='手机音频不可用'}catch(err){}}};audioSocket.onclose=()=>{if(audioContext)button.textContent='声音断开，请重试';};button.textContent='车机声音已开启';}catch(err){if(audioContext)await audioContext.close();audioContext=null;button.textContent='声音不可用，请重试';}
+};
+</script></body></html>

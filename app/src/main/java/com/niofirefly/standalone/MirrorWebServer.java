@@ -13,6 +13,7 @@ import java.net.Socket;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
@@ -25,11 +26,20 @@ import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLServerSocket;
 
 final class MirrorWebServer {
-    interface Listener { void onTouch(byte[] data); String onCommand(String action); }
+    interface Listener {
+        void onTouch(byte[] data);
+        String onCommand(String action);
+        default void onSecondTouch(byte[] data) {}
+        default String onSecondCommand(String action) { return null; }
+        default void onVideoClientConnected(boolean second) {}
+    }
     private static final String TAG = "CarMirrorWeb";
     private static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private final Context context;
     private final Listener listener;
+    private final boolean split;
+    private final String splitToken, splitPin;
+    private final Map<String, long[]> failedPins = new ConcurrentHashMap<>();
     private final Set<Client> clients = ConcurrentHashMap.newKeySet();
     private SSLServerSocket server;
     private ServerSocket diagnosticServer;
@@ -37,8 +47,21 @@ final class MirrorWebServer {
     private volatile boolean running;
     private volatile byte[] configPacket;
     private volatile byte[] lastKeyframe;
+    private volatile byte[] secondConfigPacket;
+    private volatile byte[] secondKeyframe;
+    private volatile String splitStatus;
 
-    MirrorWebServer(Context context, Listener listener) { this.context = context; this.listener = listener; }
+    MirrorWebServer(Context context, Listener listener) { this(context, listener, false); }
+    MirrorWebServer(Context context, Listener listener, boolean split) {
+        this.context = context; this.listener = listener; this.split = split;
+        if (split) {
+            SecureRandom random = new SecureRandom(); byte[] bytes = new byte[16]; random.nextBytes(bytes);
+            StringBuilder value = new StringBuilder();
+            for (byte b : bytes) value.append(String.format(Locale.ROOT, "%02x", b & 255));
+            splitToken = value.toString(); splitPin = String.format(Locale.ROOT, "%06d", random.nextInt(1_000_000));
+        } else { splitToken = null; splitPin = null; }
+    }
+    String pairPin() { return splitPin; }
 
     void start() throws Exception {
         SSLContext tls = createTlsContext();
@@ -73,13 +96,24 @@ final class MirrorWebServer {
     void broadcastVideo(byte[] packet, boolean config, boolean key) {
         if (config) configPacket = packet;
         if (key) lastKeyframe = packet;
-        for (Client client : clients) if (!client.audio) client.offerVideo(packet, config, key);
+        for (Client client : clients) if (!client.audio && !client.second) client.offerVideo(packet, config, key);
+    }
+    void broadcastSecondVideo(byte[] packet, boolean config, boolean key) {
+        if (config) secondConfigPacket = packet;
+        if (key) secondKeyframe = packet;
+        for (Client client : clients) if (client.second) client.offerVideo(packet, config, key);
     }
     void broadcastAudio(byte[] packet) {
         for (Client client : clients) if (client.audio) client.offerAudio(packet);
     }
     void notifyAudioError() {
         for (Client client : clients) if (client.audio) client.sendText("{\"error\":\"capture_failed\"}");
+    }
+    void broadcastStatus(String message) {
+        if (message.length() > 300) message = message.substring(0, 300);
+        String payload = "{\"status\":" + org.json.JSONObject.quote(message) + "}";
+        splitStatus = payload;
+        for (Client client : clients) if (!client.audio) client.sendText(payload);
     }
 
     private SSLContext createTlsContext() throws Exception {
@@ -116,14 +150,40 @@ final class MirrorWebServer {
                 OutputStream out = new BufferedOutputStream(socket.getOutputStream());
                 String first = readLine(in);
                 if (first == null || !first.startsWith("GET ")) { socket.close(); return; }
-                String path = first.split(" ")[1];
+                String target = first.split(" ")[1];
+                String[] targetParts = target.split("\\?", 2);
+                String path = targetParts[0];
+                if (split) {
+                    String query = targetParts.length == 2 ? targetParts[1] : "";
+                    if (path.equals("/") && (query.isEmpty() || query.startsWith("pin="))) {
+                        String message = "";
+                        if (!query.isEmpty()) {
+                            String remote = socket.getInetAddress().getHostAddress();
+                            if (pinLimited(remote, false)) message = "尝试过多，请一分钟后重试";
+                            else if (("pin=" + splitPin).equals(query)) {
+                                String redirect = "HTTP/1.1 302 Found\r\nLocation: /?key=" + splitToken
+                                        + "\r\nCache-Control: no-store\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                                out.write(redirect.getBytes(StandardCharsets.US_ASCII)); out.flush(); socket.close(); return;
+                            } else { pinLimited(remote, true); message = "配对码不正确"; }
+                        }
+                        byte[] body = new String(readAsset("split-pair.html"), StandardCharsets.UTF_8)
+                                .replace("{{ERROR}}", message).getBytes(StandardCharsets.UTF_8);
+                        String header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
+                                + body.length + "\r\nConnection: close\r\n\r\n";
+                        out.write(header.getBytes(StandardCharsets.US_ASCII)); out.write(body); out.flush(); socket.close(); return;
+                    }
+                    if (!("key=" + splitToken).equals(query)) {
+                        out.write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                        out.flush(); socket.close(); return;
+                    }
+                }
                 Map<String,String> headers = new HashMap<>();
                 String line;
                 while ((line = readLine(in)) != null && !line.isEmpty()) {
                     int colon = line.indexOf(':');
                     if (colon > 0) headers.put(line.substring(0, colon).trim().toLowerCase(Locale.ROOT), line.substring(colon + 1).trim());
                 }
-                if ("websocket".equalsIgnoreCase(headers.get("upgrade")) && (path.equals("/stream") || path.equals("/audio"))) {
+                if ("websocket".equalsIgnoreCase(headers.get("upgrade")) && (path.equals("/stream") || path.equals("/audio") || (split && path.equals("/stream2")))) {
                     String key = headers.get("sec-websocket-key");
                     if (key == null) { socket.close(); return; }
                     byte[] hash = MessageDigest.getInstance("SHA-1").digest((key + GUID).getBytes(StandardCharsets.US_ASCII));
@@ -131,17 +191,21 @@ final class MirrorWebServer {
                             + Base64.encodeToString(hash, Base64.NO_WRAP) + "\r\n\r\n";
                     out.write(response.getBytes(StandardCharsets.US_ASCII)); out.flush();
                     socket.setSoTimeout(0);
-                    Client client = new Client(socket, in, out, path.equals("/audio"));
+                    Client client = new Client(socket, in, out, path.equals("/audio"), path.equals("/stream2"));
                     clients.add(client);
                     if (!client.audio) {
                         MirrorService.state = "车机已连接";
-                        if (configPacket != null) client.offerVideo(configPacket, true, false);
-                        if (lastKeyframe != null) client.offerVideo(lastKeyframe, false, true);
+                        byte[] config = client.second ? secondConfigPacket : configPacket;
+                        byte[] keyframe = client.second ? secondKeyframe : lastKeyframe;
+                        if (config != null) client.offerVideo(config, true, false);
+                        if (keyframe != null) client.offerVideo(keyframe, false, true);
+                        if (splitStatus != null) client.sendText(splitStatus);
+                        if (split) listener.onVideoClientConnected(client.second);
                     }
                     client.run();
                     return;
                 }
-                String asset = path.equals("/audio-worklet.js") ? "audio-worklet.js" : "index.html";
+                String asset = path.equals("/audio-worklet.js") ? "audio-worklet.js" : split ? "split.html" : "index.html";
                 byte[] body = readAsset(asset);
                 String type = asset.endsWith(".js") ? "application/javascript" : "text/html";
                 String response = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
@@ -162,6 +226,15 @@ final class MirrorWebServer {
     private boolean hasVideoClient() {
         for (Client client : clients) if (!client.audio && client.open) return true;
         return false;
+    }
+    private boolean pinLimited(String remote, boolean failed) {
+        synchronized (failedPins) {
+            long now = System.currentTimeMillis();
+            long[] value = failedPins.computeIfAbsent(remote, key -> new long[]{now, 0});
+            if (now - value[0] > 60000) { value[0] = now; value[1] = 0; }
+            if (failed) value[1]++;
+            return value[1] >= 5;
+        }
     }
 
     private byte[] readAsset(String name) throws Exception {
@@ -195,12 +268,13 @@ final class MirrorWebServer {
         final InputStream in;
         final OutputStream out;
         final boolean audio;
+        final boolean second;
         final ArrayBlockingQueue<byte[]> queue;
         volatile boolean open = true;
         volatile boolean dropping;
         Thread writer;
-        Client(Socket socket, InputStream in, OutputStream out, boolean audio) {
-            this.socket = socket; this.in = in; this.out = out; this.audio = audio;
+        Client(Socket socket, InputStream in, OutputStream out, boolean audio, boolean second) {
+            this.socket = socket; this.in = in; this.out = out; this.audio = audio; this.second = second;
             this.queue = new ArrayBlockingQueue<>(audio ? 16 : 6);
         }
         void offerVideo(byte[] packet, boolean config, boolean key) {
@@ -209,8 +283,10 @@ final class MirrorWebServer {
             if (dropping) return;
             if (!queue.offer(frame((byte) 2, packet))) {
                 queue.clear(); dropping = !key;
+                if (split && !key) listener.onVideoClientConnected(second);
                 if (key) {
-                    if (configPacket != null) queue.offer(frame((byte) 2, configPacket));
+                    byte[] configData = second ? secondConfigPacket : configPacket;
+                    if (configData != null) queue.offer(frame((byte) 2, configData));
                     queue.offer(frame((byte) 2, packet));
                 }
             }
@@ -243,12 +319,12 @@ final class MirrorWebServer {
                     if (opcode == 8) break;
                     if (opcode == 9) { queue.offer(frame((byte) 10, payload)); continue; }
                     if (audio) continue;
-                    if (opcode == 2) listener.onTouch(payload);
+                    if (opcode == 2) { if (second) listener.onSecondTouch(payload); else listener.onTouch(payload); }
                     if (opcode == 1) {
                         String text = new String(payload, StandardCharsets.UTF_8);
-                        String action = text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("getDisplayState") ? "getDisplayState" :
+                        String action = text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("back") ? "back" : text.contains("getDisplayState") ? "getDisplayState" :
                                 text.contains("displayOff") ? "displayOff" : text.contains("displayOn") ? "displayOn" : "";
-                        String response = listener.onCommand(action);
+                        String response = second ? listener.onSecondCommand(action) : listener.onCommand(action);
                         if (response != null) sendText(response);
                     }
                 }

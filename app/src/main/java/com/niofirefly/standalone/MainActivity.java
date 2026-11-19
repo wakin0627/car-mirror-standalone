@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -24,6 +25,8 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.ArrayList;
 
 public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -37,9 +40,12 @@ public final class MainActivity extends Activity {
     private CheckBox tabletMode;
     private CheckBox virtualMode;
     private CheckBox windowDecorations;
+    private CheckBox splitMode;
+    private Spinner leftApp, rightApp;
+    private List<ResolveInfo> launchableApps;
     private final Runnable refreshTask = new Runnable() {
         @Override public void run() {
-            if (status != null) status.setText(MirrorService.state);
+            if (status != null) status.setText(MirrorService.state + (SplitMirrorService.active && !SplitMirrorService.pairCode.isEmpty() ? "\n车机配对码：" + SplitMirrorService.pairCode : ""));
             if (address != null) address.setText(currentUrl() == null ? "请先连接车机 Wi-Fi" : currentUrl());
             handler.postDelayed(this, 1000);
         }
@@ -63,18 +69,29 @@ public final class MainActivity extends Activity {
             }
             String size = quality.getSelectedItemPosition() == 0 ? "1200x1920" :
                     quality.getSelectedItemPosition() == 1 ? "800x1280" : "1600x2560";
-            Intent start = new Intent(this, MirrorService.class).setAction(MirrorService.ACTION_START);
+            if (MirrorService.active || SplitMirrorService.active) {
+                status.setText("请先断开当前连接"); return;
+            }
+            if (splitMode.isChecked() && launchableApps.isEmpty()) {
+                status.setText("没有找到可启动的应用"); return;
+            }
+            Intent start = new Intent(this, splitMode.isChecked() ? SplitMirrorService.class : MirrorService.class).setAction(MirrorService.ACTION_START);
             start.putExtra("size", size);
             start.putExtra("orientation", flip.isChecked() ? "@90" : "@270");
             start.putExtra("tabletMode", tabletMode.isChecked());
             start.putExtra("virtualMode", virtualMode.isChecked());
             start.putExtra("windowDecorations", windowDecorations.isChecked());
             start.putExtra("carRatio", carRatio.getSelectedItemPosition());
+            if (splitMode.isChecked()) {
+                start.putExtra("leftComponent", component(launchableApps.get(leftApp.getSelectedItemPosition())));
+                start.putExtra("rightComponent", component(launchableApps.get(rightApp.getSelectedItemPosition())));
+            }
             startForegroundService(start);
             status.setText("正在启动");
         });
         button(root, "断开，恢复手机声音", v -> {
-            startService(new Intent(this, MirrorService.class).setAction(MirrorService.ACTION_STOP));
+            startService(new Intent(this, SplitMirrorService.active ? SplitMirrorService.class : MirrorService.class)
+                    .setAction(MirrorService.ACTION_STOP));
             status.setText("正在断开");
         });
         button(root, "复制车机网址", v -> {
@@ -85,14 +102,44 @@ public final class MainActivity extends Activity {
             }
         });
         button(root, "打开 Wi-Fi 设置", v -> startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
+        button(root, "设置后台运行", v -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:" + getPackageName()))));
         button(root, "检查更新", v -> updates.check());
         updateStatus = label("", 14, Color.rgb(38, 90, 160)); root.addView(updateStatus);
         updates = new UpdateManager(this, updateStatus);
+        splitMode = new CheckBox(this);
+        splitMode.setText("双应用桌面（实验）");
+        root.addView(splitMode);
+        LinearLayout splitOptions = new LinearLayout(this);
+        splitOptions.setOrientation(LinearLayout.VERTICAL);
+        splitOptions.setVisibility(View.GONE);
+        Intent launchQuery = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        launchableApps = new ArrayList<>(getPackageManager().queryIntentActivities(launchQuery, 0));
+        launchableApps.removeIf(app -> getPackageName().equals(app.activityInfo.packageName));
+        launchableApps.sort((a, b) -> a.loadLabel(getPackageManager()).toString().compareToIgnoreCase(b.loadLabel(getPackageManager()).toString()));
+        List<String> labels = new ArrayList<>();
+        for (ResolveInfo app : launchableApps) labels.add(app.loadLabel(getPackageManager()).toString());
+        ArrayAdapter<String> appAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels);
+        splitOptions.addView(label("左侧应用", 16, Color.DKGRAY));
+        leftApp = new Spinner(this); leftApp.setAdapter(appAdapter); splitOptions.addView(leftApp);
+        splitOptions.addView(label("右侧应用", 16, Color.DKGRAY));
+        rightApp = new Spinner(this); rightApp.setAdapter(appAdapter); splitOptions.addView(rightApp);
+        splitOptions.addView(label("首次建议使用低延迟画质。窗口可以拖动或调整大小；应用内容保持原比例。", 14, Color.GRAY));
+        root.addView(splitOptions);
+        for (int i = 0; i < launchableApps.size(); i++) {
+            String pkg = launchableApps.get(i).activityInfo.packageName;
+            if (pkg.equals("com.autonavi.minimap")) leftApp.setSelection(i);
+            if (pkg.equals("tv.danmaku.bili")) rightApp.setSelection(i);
+        }
         root.addView(label("画质", 16, Color.DKGRAY));
         quality = new Spinner(this);
         String[] modes = {"标准：宽 1920", "低延迟：宽 1280", "高清：宽 2560"};
         ArrayAdapter<String> modesAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         quality.setAdapter(modesAdapter); root.addView(quality);
+        splitMode.setOnCheckedChangeListener((button, checked) -> {
+            splitOptions.setVisibility(checked ? View.VISIBLE : View.GONE);
+            if (checked) quality.setSelection(1);
+        });
         root.addView(label("车机屏幕比例", 16, Color.DKGRAY));
         carRatio = new Spinner(this);
         carRatio.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
@@ -139,6 +186,9 @@ public final class MainActivity extends Activity {
         p.bottomMargin = dp(8); parent.addView(b, p); b.setOnClickListener(click);
     }
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
+    private String component(ResolveInfo app) {
+        return new android.content.ComponentName(app.activityInfo.packageName, app.activityInfo.name).flattenToString();
+    }
     private String currentUrl() {
         WifiManager wifi = (WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (wifi != null) {
