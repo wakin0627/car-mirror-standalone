@@ -42,7 +42,6 @@
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
-        <package android:name="app.ft" />
         <package android:name="com.miui.carlink" />
         <package android:name="com.baidu.carlife.xiaomi" />
         <package android:name="com.autonavi.amapauto" />
@@ -59,7 +58,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="FT 网页桥接（测试版）"
+        android:label="CarWith 网页桥接"
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.CarPlaySender">
@@ -77,7 +76,7 @@
 
         <activity
             android:name=".browser.BrowserBridgeActivity"
-            android:label="FT 网页桥接（测试版）"
+            android:label="CarWith 网页桥接"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

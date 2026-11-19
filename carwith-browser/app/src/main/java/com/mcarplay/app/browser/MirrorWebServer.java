@@ -106,7 +106,7 @@ final class MirrorWebServer {
                 String first = readLine(client.getInputStream());
                 if (first == null || !first.startsWith("GET ")) return;
                 String host = client.getLocalAddress().getHostAddress();
-                String body = "FT browser bridge is reachable. Open https://" + host + ":8443/ for video.\n";
+                String body = "CarWith browser bridge is reachable. Open https://" + host + ":8443/ for video.\n";
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                 String response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
                         + bytes.length + "\r\nConnection: close\r\n\r\n";
@@ -168,7 +168,7 @@ final class MirrorWebServer {
                     clients.add(client);
                     if (!client.audio) {
                         BrowserBridgeService.browserConnected = true;
-                        BrowserBridgeService.state = BrowserBridgeService.videoReady ? "车机已连接" : "车机网页已连接，等待 FT 画面";
+                        BrowserBridgeService.state = BrowserBridgeService.videoReady ? "车机已连接" : "车机网页已连接，等待 CarWith 画面";
                         if (configPacket != null) client.offerVideo(configPacket, true, false);
                         if (lastKeyframe != null) client.offerVideo(lastKeyframe, false, true);
                     }
@@ -315,7 +315,7 @@ final class MirrorWebServer {
             if (!audio && running && !hasVideoClient()) {
                 BrowserBridgeService.browserConnected = false;
                 BrowserBridgeService.state = BrowserBridgeService.videoReady
-                        ? "FT 画面已接收，等待车机浏览器" : "等待 FT 画面";
+                        ? "CarWith 画面已接收，等待车机浏览器" : "等待 CarWith 画面";
             }
             if (writer != null) writer.interrupt();
             try { socket.close(); } catch (Exception ignored) {}

@@ -1,9 +1,3 @@
-# FT 网页桥接实验版说明
-
-当前实验版从本机 FT 的六路 CarLife 接口接收画面和声音并转发浏览器触控，不包含 FT。请先安装官方 FT 3.9.68，授予所需权限并启动 Hotspot 模式；车机连接手机热点后，打开桥接器显示的 HTTPS 地址并输入配对码。FT 可能自动打开热点，影响手机现有 Wi-Fi。
-
-已进行六路模拟握手、H.264、PCM 和触控转发测试以及 Android 构建和 lint；未在真实 FT、手机或车机上验证。首次测试可能无法连接或黑屏，请保留状态提示供排查。源自 mcarplay 的 MIT 许可与既有第三方声明继续保留。以下为旧版 CarWith 桥接说明，不代表当前实验版功能。
-
 # CarWith 网页桥接实验版
 
 本分支从 [mcarplay](https://github.com/wangxso/mcarplay) 的 MIT 许可源码派生，保留上游 `LICENSE`、`NOTICE` 和 `THIRD_PARTY_NOTICES.md`。新增浏览器模式：小米 CarWith/小米 CarLife 在手机本机生成车载画面，本 App 接收其七路本地 CarLife 通道，把 H.264 视频、PCM 音频通过 HTTPS/WebSocket 发给同一 Wi-Fi 上的车机浏览器，并把网页单点触控送回 CarWith。没有内置或修改小米、百度 APK。
