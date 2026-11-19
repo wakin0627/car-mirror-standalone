@@ -42,6 +42,12 @@ public final class SplitServerTest {
         if (first != 0x82 || size < 0 || size >= 126) throw new AssertionError("unexpected websocket frame");
         byte[] data = new byte[size]; new DataInputStream(in).readFully(data); return data;
     }
+    private static String readTextFrame(InputStream in) throws Exception {
+        int first = in.read(), size = in.read();
+        if (first != 0x81 || size < 0 || size >= 126) throw new AssertionError("unexpected text frame");
+        byte[] data = new byte[size]; new DataInputStream(in).readFully(data);
+        return new String(data, StandardCharsets.UTF_8);
+    }
     private static void require(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
     private static void sendText(SSLSocket socket, String text) throws Exception {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8), mask = {1, 2, 3, 4};
@@ -75,6 +81,12 @@ public final class SplitServerTest {
                     .findFirst().orElseThrow(() -> new AssertionError("missing token")).substring("Location: /?key=".length());
             require(token.matches("[a-f0-9]{32}"), "bad session token");
             try (SSLSocket s = socket()) { request(s, "/apps?key=" + token, false); require(headers(s.getInputStream()).contains("200 OK"), "authenticated app list unavailable"); require(new String(s.getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("Maps"), "incorrect app list"); }
+            server.notifyAudioError();
+            try (SSLSocket audio = socket()) {
+                request(audio, "/audio?key=" + token, true);
+                require(headers(audio.getInputStream()).contains("101 Switching Protocols"), "audio stream failed");
+                require(readTextFrame(audio.getInputStream()).contains("capture_failed"), "late audio client missed capture failure");
+            }
             try (SSLSocket left = socket(); SSLSocket right = socket()) {
                 request(left, "/stream?key=" + token, true); require(headers(left.getInputStream()).contains("101 Switching Protocols"), "left stream failed");
                 request(right, "/stream2?key=" + token, true); require(headers(right.getInputStream()).contains("101 Switching Protocols"), "right stream failed");

@@ -37,6 +37,7 @@ public final class MainActivity extends Activity {
     private TextView updateStatus;
     private UpdateManager updates;
     private Spinner quality;
+    private Spinner fps;
     private Spinner carRatio;
     private CheckBox flip;
     private CheckBox tabletMode;
@@ -90,6 +91,7 @@ public final class MainActivity extends Activity {
             start.putExtra("virtualMode", virtualMode.isChecked());
             start.putExtra("windowDecorations", windowDecorations.isChecked());
             start.putExtra("carRatio", carRatio.getSelectedItemPosition());
+            start.putExtra("maxFps", new int[]{30, 60, 90, 120}[fps.getSelectedItemPosition()]);
             startForegroundService(start);
             status.setText("正在启动");
         });
@@ -127,7 +129,7 @@ public final class MainActivity extends Activity {
         root.addView(displayId);
         existingDisplay.setOnCheckedChangeListener((button, checked) -> {
             displayId.setVisibility(checked ? View.VISIBLE : View.GONE);
-            if (checked) splitMode.setChecked(false);
+            if (checked) { splitMode.setChecked(false); quality.setSelection(2); }
         });
         root.addView(label("先在 MagicDesk 创建虚拟屏并启动桌面，再填写屏幕 ID。兼容性和触控需实测。", 14, Color.GRAY));
         splitMode = new CheckBox(this);
@@ -147,6 +149,11 @@ public final class MainActivity extends Activity {
             splitOptions.setVisibility(checked ? View.VISIBLE : View.GONE);
             if (checked) { quality.setSelection(1); existingDisplay.setChecked(false); }
         });
+        root.addView(label("帧率上限（实际取决于手机和车机）", 16, Color.DKGRAY));
+        fps = new Spinner(this);
+        fps.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"30 帧（省电）", "60 帧（推荐）", "90 帧", "120 帧"}));
+        fps.setSelection(1); root.addView(fps);
         root.addView(label("车机屏幕比例", 16, Color.DKGRAY));
         carRatio = new Spinner(this);
         carRatio.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,

@@ -12,6 +12,9 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.wifi.WifiManager;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -42,6 +45,8 @@ public final class MirrorService extends Service implements MirrorWebServer.List
     private Process scrcpy;
     private LocalSocket videoSocket, audioSocket, controlSocket;
     private PowerManager.WakeLock wakeLock;
+    private WifiManager.WifiLock wifiLock;
+    private final Set<Network> wifiNetworks = ConcurrentHashMap.newKeySet();
     private ConnectivityManager connectivity;
     private ConnectivityManager.NetworkCallback wifiCallback;
     private File rootScript;
@@ -100,6 +105,8 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         if (existingDisplayId > 0) carDisplayId = existingDisplayId;
         boolean windowDecorations = intent != null && intent.getBooleanExtra("windowDecorations", false);
         int ratio = intent == null ? 0 : intent.getIntExtra("carRatio", 0);
+        int fps = intent == null ? 60 : intent.getIntExtra("maxFps", 60);
+        if (fps != 30 && fps != 60 && fps != 90 && fps != 120) fps = 60;
         int virtualHeight = ratio == 1 ? maxSize * 9 / 16 : ratio == 2 ? maxSize / 2 : maxSize * 5 / 8;
         rootScript = copyAsset("root-setup.sh");
         File jar = copyAsset("scrcpy-server.jar");
@@ -113,8 +120,10 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         ensureActive();
         connectivity = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         wifiCallback = new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network network) { wifiNetworks.add(network); }
             @Override public void onLost(Network network) {
-                if (!stopping) { state = "Wi-Fi 已断开"; stopSelf(); }
+                wifiNetworks.remove(network);
+                if (!stopping && wifiNetworks.isEmpty()) state = "Wi-Fi 连接变化，等待网络恢复";
             }
         };
         connectivity.registerNetworkCallback(new NetworkRequest.Builder()
@@ -122,12 +131,15 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CarMirror:stream");
         wakeLock.acquire();
+        wifiLock = ((WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE))
+                .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "CarMirror:stream-wifi");
+        wifiLock.acquire();
         String command = "su shell -c 'CLASSPATH=" + ROOT_DIR + "/scrcpy-server.jar /system/bin/app_process "
                 + "/system/bin com.genymobile.scrcpy.Server 3.1 log_level=info scid=01234567 "
                 + (existingDisplayId > 0 ? "display_id=" + existingDisplayId + " max_size=" + maxSize :
                    virtualMode ? "new_display=" + maxSize + "x" + virtualHeight + "/240 vd_system_decorations=" + windowDecorations :
                         "max_size=" + maxSize + " capture_orientation=" + orientation)
-                + " video_bit_rate=" + bitRate + " max_fps=30 "
+                + " video_bit_rate=" + bitRate + " max_fps=" + fps + " "
                 + "audio=true audio_source=output audio_codec=raw control=true cleanup=false "
                 + "tunnel_forward=true send_device_meta=false send_codec_meta=false "
                 + "send_dummy_byte=false send_frame_meta=true'";
@@ -160,7 +172,6 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         ensureActive();
         audioSocket = connectSocket();
         ensureActive();
-        audioSocket.setSoTimeout(15000);
         controlSocket = connectSocket();
         ensureActive();
         new Thread(() -> readVideo(videoSocket), "car-mirror-video").start();
@@ -205,14 +216,12 @@ public final class MirrorService extends Service implements MirrorWebServer.List
     private void readAudio(LocalSocket socket) {
         try {
             DataInputStream in = new DataInputStream(socket.getInputStream());
-            boolean first = true;
             while (!stopping) {
                 in.readLong();
                 int size = in.readInt();
                 if (size < 0 || size > 16384) throw new Exception("无效音频帧：" + size);
                 byte[] packet = new byte[size];
                 in.readFully(packet);
-                if (first) { socket.setSoTimeout(0); first = false; }
                 if (web != null) web.broadcastAudio(packet);
             }
         } catch (Exception e) {
@@ -291,6 +300,9 @@ public final class MirrorService extends Service implements MirrorWebServer.List
         carDisplayId = -1;
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         wakeLock = null;
+        if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+        wifiLock = null;
+        wifiNetworks.clear();
         if (rootScript != null) try { root("sh " + rootScript.getAbsolutePath() + " stop"); } catch (Exception e) { Log.e(TAG, "Restore failed", e); }
     }
     @Override public void onDestroy() {

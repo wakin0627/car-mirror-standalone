@@ -82,6 +82,8 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
         String size = intent.getStringExtra("size");
         int totalWidth = "800x1280".equals(size) ? 1280 : "1600x2560".equals(size) ? 2560 : 1920;
         int ratio = intent.getIntExtra("carRatio", 0);
+        int fps = intent.getIntExtra("maxFps", 60);
+        if (fps != 30 && fps != 60 && fps != 90 && fps != 120) fps = 60;
         int height = ratio == 1 ? totalWidth * 9 / 16 : ratio == 2 ? totalWidth / 2 : totalWidth * 5 / 8;
         int width = totalWidth / 2;
         File jar = new File(getFilesDir(), "scrcpy-server.jar");
@@ -113,9 +115,9 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
             connectivity.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), wifiCallback);
         }
         checkActive();
-        startDisplay(0, width, height);
+        startDisplay(0, width, height, fps);
         checkActive();
-        startDisplay(1, width, height);
+        startDisplay(1, width, height, fps);
         checkActive();
         new Thread(() -> readVideo(0), "split-video-left").start();
         new Thread(() -> readVideo(1), "split-video-right").start();
@@ -129,13 +131,13 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
         return component;
     }
 
-    private void startDisplay(int index, int width, int height) throws Exception {
+    private void startDisplay(int index, int width, int height, int fps) throws Exception {
         checkActive();
         String scid = index == 0 ? "01234567" : "01234568";
         String command = "su shell -c 'CLASSPATH=" + BASE + "/scrcpy-server.jar /system/bin/app_process /system/bin "
                 + "com.genymobile.scrcpy.Server 3.1 log_level=info scid=" + scid
                 + " new_display=" + width + "x" + height + "/160 vd_system_decorations=false"
-                + " video_bit_rate=4000000 max_fps=30 audio=" + (index == 0)
+                + " video_bit_rate=4000000 max_fps=" + fps + " audio=" + (index == 0)
                 + " audio_source=output audio_codec=raw control=true cleanup=false tunnel_forward=true"
                 + " send_device_meta=false send_codec_meta=false send_dummy_byte=false send_frame_meta=true'";
         Process process = new ProcessBuilder("su", "-c", command).redirectErrorStream(true).start();
@@ -148,7 +150,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
         LocalSocket video = connect(socketName);
         synchronized (this) { if (stopping) { video.close(); throw new Exception("连接已取消"); } videos[index] = video; }
         if (index == 0) {
-            LocalSocket audioSocket = connect(socketName); audioSocket.setSoTimeout(15000);
+            LocalSocket audioSocket = connect(socketName);
             synchronized (this) { if (stopping) { audioSocket.close(); throw new Exception("连接已取消"); } audio = audioSocket; }
         }
         LocalSocket control = connect(socketName);
@@ -201,12 +203,11 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
 
     private void readAudio() {
         try {
-            DataInputStream in = new DataInputStream(audio.getInputStream()); boolean first = true;
+            DataInputStream in = new DataInputStream(audio.getInputStream());
             while (!stopping) {
                 in.readLong(); int length = in.readInt();
                 if (length < 0 || length > 16384) throw new Exception("无效音频帧");
                 byte[] packet = new byte[length]; in.readFully(packet);
-                if (first) { audio.setSoTimeout(0); first = false; }
                 MirrorWebServer server = web; if (server != null) server.broadcastAudio(packet);
             }
         } catch (Exception e) { if (!stopping) { Log.w(TAG, "Audio unavailable", e); if (web != null) web.notifyAudioError(); } }

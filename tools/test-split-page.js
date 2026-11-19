@@ -44,7 +44,7 @@ const sandbox = {
   location: { protocol:'https:', host:'192.0.2.1:8443', search:'?key=abc123' },
   URLSearchParams, Uint8Array, ArrayBuffer, DataView,
   EncodedVideoChunk: class { constructor(value) { Object.assign(this,value); } },
-  setInterval() {}, setTimeout() {}, console, fetch: () => Promise.resolve({ok:true,json:()=>Promise.resolve([])}),
+  setInterval() {}, setTimeout() {}, performance: {now: () => 1}, console, fetch: () => Promise.resolve({ok:true,json:()=>Promise.resolve([])}),
 };
 const html = fs.readFileSync('app/src/main/assets/split.html','utf8');
 vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], sandbox);

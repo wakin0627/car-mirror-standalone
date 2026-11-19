@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### MagicDesk 投屏实验版 0.1.12
+
+[下载 CarDesktop-0.1.12-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.12-test/CarDesktop-0.1.12-test.apk)。恢复固定可见的网页控制按钮，音频捕获不再因开头 15 秒没有数据而超时；新增 30/60/90/120 FPS 上限设置，并改善 Wi-Fi 保活和网络切换时的服务行为。连接 MagicDesk 屏幕时默认允许 2560 宽编码。请在车机网页点击「开启车机声音」。
+
+120 FPS 为捕获上限，实际取决于手机屏幕、编码器、应用、Wi-Fi 和车机浏览器；后台与熄屏受 MagicDesk 和 HyperOS 电池策略影响。MagicDesk 桌面图标、视频应用全屏布局仍需实机排查，本版不保证修复。APK 和 lint 已验证；音频、后台、画面和性能均未在小米 13 Ultra 及车机实测。SHA-256：`9451DFE5EA0BD9608425FAECBB8E853BDDA059AAD50DAE9BD0ABB09D69C6E127`。
+
 ### MagicDesk 独立屏幕实验版 0.1.11
 
 [下载 CarDesktop-0.1.11-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.11-test/CarDesktop-0.1.11-test.apk)。需另装 [MagicDesk 官方版](https://github.com/mekhontsev/magicdesk/releases/tag/v2.2.8)：在 MagicDesk 设置 Root 和桌面环境，创建虚拟屏并在该屏启动桌面，记录其屏幕 ID。在本 App 勾选「连接 MagicDesk 已有屏幕（实验）」并填写 ID，连接车机 Wi-Fi，在车机浏览器打开显示的网址。

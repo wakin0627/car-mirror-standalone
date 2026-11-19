@@ -52,6 +52,7 @@ final class MirrorWebServer {
     private volatile byte[] secondConfigPacket;
     private volatile byte[] secondKeyframe;
     private volatile String splitStatus;
+    private volatile boolean audioFailed;
 
     MirrorWebServer(Context context, Listener listener) { this(context, listener, false); }
     MirrorWebServer(Context context, Listener listener, boolean split) {
@@ -109,6 +110,7 @@ final class MirrorWebServer {
         for (Client client : clients) if (client.audio) client.offerAudio(packet);
     }
     void notifyAudioError() {
+        audioFailed = true;
         for (Client client : clients) if (client.audio) client.sendText("{\"error\":\"capture_failed\"}");
     }
     void broadcastStatus(String message) {
@@ -195,6 +197,7 @@ final class MirrorWebServer {
                     socket.setSoTimeout(0);
                     Client client = new Client(socket, in, out, path.equals("/audio"), path.equals("/stream2"));
                     clients.add(client);
+                    if (client.audio && audioFailed) client.sendText("{\"error\":\"capture_failed\"}");
                     if (!client.audio) {
                         MirrorService.state = "车机已连接";
                         byte[] config = client.second ? secondConfigPacket : configPacket;
