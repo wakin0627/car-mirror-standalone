@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### 车机桌面实验版 0.1.10
+
+[下载 CarDesktop-0.1.10-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.10-test/CarDesktop-0.1.10-test.apk)。本版改进触屏操作：底栏固定提供「返回」「桌面」「应用」及当前应用切换按钮；应用列表可随时打开，窗口占满时可选择替换其中一个；窗口标题栏按钮也已加大。画质、声音及连接选项位于「更多」。
+
+开启 App 的「双应用桌面（实验）」连接并配对。仍只支持两个独立应用窗口，窗口缩放仅缩放画面，不会重新排版；不是完整的三星 DeX。需要在小米 13 Ultra 和车机上验证。SHA-256：`89D7B4B29F3AC13CAE48C704A567568E1AC00B8F9A2FA390349A4E987F2D87EF`。
+
 ### 车机桌面实验版 0.1.9
 
 [下载 CarDesktop-0.1.9-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.9-test/CarDesktop-0.1.9-test.apk)。手机勾选「双应用桌面（实验）」并连接；车机打开网址，输入配对码，在桌面选择应用。最多同时打开两个窗口；可拖动标题栏、拖动右下角缩放、最小化和最大化。底栏「桌面」隐藏窗口，点任务按钮恢复。声音通过底栏「开启车机声音」开启。

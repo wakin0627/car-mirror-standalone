@@ -11,11 +11,12 @@ class Element {
   querySelectorAll(name) { return name === ".bar button" ? [this.children[".back"], this.children[".min"], this.children[".max"], this.children[".close"]] : []; }
   appendChild(child) { (this.appended ||= []).push(child); }
   remove() {}
+  click() { this.fire("click"); if (this.onclick) this.onclick(); }
   setPointerCapture() {}
   getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 200 }; }
   getContext() { return { drawImage() {} }; }
 }
-const items = Object.fromEntries(['desktop','message','reset','audio','full','disconnect','left','right','home','icons','tasks'].map(x => [x,new Element(x)]));
+const items = Object.fromEntries(['desktop','message','reset','audio','full','disconnect','left','right','home','icons','tasks','drawer','choose','options','apps','dismiss','more','back','cancel-replace','replace-left','replace-right','task-left','task-right'].map(x => [x,new Element(x)]));
 for (const key of ['left','right']) for (const name of ['canvas','.bar','.resize','.fps','.back','.min','.max','.close','.title']) items[key].children[name] = new Element(key + name);
 const sockets = [];
 class WebSocket {
@@ -77,10 +78,27 @@ sandbox.openApp({name:'视频', component:'com.example/.Video'});
 assert.strictEqual(items.right.hidden, false);
 assert.strictEqual(sockets[1].sent[3], 'launch:com.example/.Video');
 sandbox.openApp({name:'第三个', component:'com.example/.Third'});
-assert.match(items.message.textContent, /两个/);
+assert.strictEqual(items.choose.hidden, false);
+assert.match(items['replace-left'].textContent, /地图/);
+items['cancel-replace'].onclick();
+assert.strictEqual(items.choose.hidden, true);
+items.home.onclick();
+assert.strictEqual(items.left.hidden, true);
+assert.strictEqual(items.right.hidden, true);
+items['task-right'].onclick();
+assert.strictEqual(items.right.hidden, false);
+items.apps.onclick();
+assert.strictEqual(items.drawer.hidden, false);
+items.dismiss.onclick();
+items.back.onclick();
+assert.strictEqual(sockets[1].sent[4], '{"action":"back"}');
+sandbox.openApp({name:'第三个', component:'com.example/.Third'});
+items['replace-left'].onclick();
+assert.strictEqual(sockets[0].sent[1], 'launch:com.example/.Third');
+assert.strictEqual(items['task-left'].textContent, '第三个');
 items.left.children['.min'].onclick();
 assert.strictEqual(items.left.hidden, true);
-sandbox.openApp({name:'地图', component:'com.example/.Maps'});
+sandbox.openApp({name:'第三个', component:'com.example/.Third'});
 assert.strictEqual(items.left.hidden, false);
 console.log('Desktop: app launch, window controls, streams and touch routing passed');
 
