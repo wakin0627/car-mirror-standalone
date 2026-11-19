@@ -54,22 +54,27 @@ public final class SplitServerTest {
         File files = Files.createTempDirectory("split-server-test").toFile();
         CountDownLatch secondBack = new CountDownLatch(1);
         CountDownLatch videoClients = new CountDownLatch(2);
+        CountDownLatch launch = new CountDownLatch(1);
         MirrorWebServer server = new MirrorWebServer(new Context(files, new File("app/src/main/assets")), new MirrorWebServer.Listener() {
             public void onTouch(byte[] data) {}
             public String onCommand(String action) { return null; }
             public String onSecondCommand(String action) { if ("back".equals(action)) secondBack.countDown(); return null; }
             public void onVideoClientConnected(boolean second) { videoClients.countDown(); }
+            public String desktopApps() { return "[{\"name\":\"Maps\"}]"; }
+            public String onLaunch(boolean second, String component) { if (second && component.equals("com.example/.Maps")) launch.countDown(); return null; }
         }, true);
         try {
             server.start();
             try (SSLSocket s = socket()) { request(s, "/", false); require(headers(s.getInputStream()).contains("200 OK"), "pair page unavailable"); }
             try (SSLSocket s = socket()) { request(s, "/stream", true); require(headers(s.getInputStream()).contains("403 Forbidden"), "stream must require pairing"); }
+            try (SSLSocket s = socket()) { request(s, "/apps", false); require(headers(s.getInputStream()).contains("403 Forbidden"), "app list must require pairing"); }
             String redirect;
             try (SSLSocket s = socket()) { request(s, "/?pin=" + server.pairPin(), false); redirect = headers(s.getInputStream()); }
             require(redirect.contains("302 Found"), "correct PIN did not pair");
             String token = Arrays.stream(redirect.split("\\r\\n")).filter(x -> x.startsWith("Location: /?key="))
                     .findFirst().orElseThrow(() -> new AssertionError("missing token")).substring("Location: /?key=".length());
             require(token.matches("[a-f0-9]{32}"), "bad session token");
+            try (SSLSocket s = socket()) { request(s, "/apps?key=" + token, false); require(headers(s.getInputStream()).contains("200 OK"), "authenticated app list unavailable"); require(new String(s.getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("Maps"), "incorrect app list"); }
             try (SSLSocket left = socket(); SSLSocket right = socket()) {
                 request(left, "/stream?key=" + token, true); require(headers(left.getInputStream()).contains("101 Switching Protocols"), "left stream failed");
                 request(right, "/stream2?key=" + token, true); require(headers(right.getInputStream()).contains("101 Switching Protocols"), "right stream failed");
@@ -78,6 +83,8 @@ public final class SplitServerTest {
                 server.broadcastSecondVideo(new byte[]{4, 5, 6}, false, true);
                 require(Arrays.equals(readFrame(left.getInputStream()), new byte[]{1, 2, 3}), "left stream received wrong frame");
                 require(Arrays.equals(readFrame(right.getInputStream()), new byte[]{4, 5, 6}), "right stream received wrong frame");
+                sendText(right, "launch:com.example/.Maps");
+                require(launch.await(2, TimeUnit.SECONDS), "launch did not reach correct display");
                 sendText(right, "{\"action\":\"back\"}");
                 require(secondBack.await(2, TimeUnit.SECONDS), "right-window back did not reach the right listener");
             }

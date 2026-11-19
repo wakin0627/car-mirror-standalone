@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### 车机桌面实验版 0.1.9
+
+[下载 CarDesktop-0.1.9-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.9-test/CarDesktop-0.1.9-test.apk)。手机勾选「双应用桌面（实验）」并连接；车机打开网址，输入配对码，在桌面选择应用。最多同时打开两个窗口；可拖动标题栏、拖动右下角缩放、最小化和最大化。底栏「桌面」隐藏窗口，点任务按钮恢复。声音通过底栏「开启车机声音」开启。
+
+这是网页桌面加两个独立虚拟屏的实验方案，不是三星 DeX：缩放窗口只缩放画面，应用布局不会跟随窗口重新排版，应用图标目前使用名称首字。各应用对虚拟屏的兼容性、触控、声音及后台稳定性须在小米 13 Ultra 和车机上实测。车机浏览器需支持 WebCodecs 和 AudioWorklet，且接受手机的 HTTPS 证书。覆盖安装同包名旧版。SHA-256：`8572B262007FCBC9DB1AF0A4347499857B8728E7BA4967125A35FB2B94B0E77A`。
+
 ### 双应用桌面实验版
 
 [下载 CarDesktop-0.1.8-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.8-test/CarDesktop-0.1.8-test.apk)。此版新增「双应用桌面」：在手机勾选后分别选择左右应用，连接车机 Wi-Fi 并授予 Root；在车机浏览器打开手机显示的网址、输入手机显示的六位配对码。网页的两个应用窗口可以通过标题栏拖动，通过右下角调整显示大小，每个窗口有自己的返回按钮。点「开启车机声音」播放手机的一路系统音频。

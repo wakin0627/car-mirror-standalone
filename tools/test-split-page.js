@@ -3,17 +3,20 @@ const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
 class Element {
-  constructor(name) { this.name = name; this.style = {}; this.handlers = {}; this.children = {}; this.width = 0; this.height = 0; this.textContent = ''; }
+  constructor(name) { this.name = name; this.id = name; this.style = {}; this.dataset = {}; this.hidden = true; this.handlers = {}; this.children = {}; this.width = 0; this.height = 0; this.textContent = ''; }
   addEventListener(name, fn) { (this.handlers[name] ||= []).push(fn); }
   removeEventListener(name, fn) { this.handlers[name] = (this.handlers[name] || []).filter(x => x !== fn); }
   fire(name, data = {}) { const event = { pointerId: 1, clientX: 20, clientY: 30, preventDefault() {}, stopPropagation() {}, ...data }; for (const fn of [...(this.handlers[name] || [])]) fn(event); }
   querySelector(name) { return this.children[name]; }
+  querySelectorAll(name) { return name === ".bar button" ? [this.children[".back"], this.children[".min"], this.children[".max"], this.children[".close"]] : []; }
+  appendChild(child) { (this.appended ||= []).push(child); }
+  remove() {}
   setPointerCapture() {}
   getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 200 }; }
   getContext() { return { drawImage() {} }; }
 }
-const items = Object.fromEntries(['desktop','message','reset','audio','full','disconnect','left','right'].map(x => [x,new Element(x)]));
-for (const key of ['left','right']) for (const name of ['canvas','.bar','.resize','.bar span','.back']) items[key].children[name] = new Element(key + name);
+const items = Object.fromEntries(['desktop','message','reset','audio','full','disconnect','left','right','home','icons','tasks'].map(x => [x,new Element(x)]));
+for (const key of ['left','right']) for (const name of ['canvas','.bar','.resize','.fps','.back','.min','.max','.close','.title']) items[key].children[name] = new Element(key + name);
 const sockets = [];
 class WebSocket {
   static OPEN = 1;
@@ -30,6 +33,7 @@ class VideoDecoder {
 }
 const document = {
   getElementById: id => items[id],
+  createElement: name => new Element(name),
   querySelectorAll: selector => selector === '.window' ? [items.left,items.right] : [],
   documentElement: { requestFullscreen: () => Promise.resolve() },
   exitFullscreen() {},
@@ -39,7 +43,7 @@ const sandbox = {
   location: { protocol:'https:', host:'192.0.2.1:8443', search:'?key=abc123' },
   URLSearchParams, Uint8Array, ArrayBuffer, DataView,
   EncodedVideoChunk: class { constructor(value) { Object.assign(this,value); } },
-  setInterval() {}, setTimeout() {}, console,
+  setInterval() {}, setTimeout() {}, console, fetch: () => Promise.resolve({ok:true,json:()=>Promise.resolve([])}),
 };
 const html = fs.readFileSync('app/src/main/assets/split.html','utf8');
 vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], sandbox);
@@ -65,7 +69,20 @@ items.right.children.canvas.fire('pointerdown', {clientX:120});
 assert.strictEqual(sockets[1].sent.length, 2, 'touch outside the video must be ignored');
 items.right.children['.back'].fire('click');
 assert.strictEqual(sockets[1].sent[2], '{"action":"back"}');
-console.log('Split page: two streams, decoding and per-window touch routing passed');
+sandbox.openApp({name:'地图', component:'com.example/.Maps'});
+assert.strictEqual(items.left.hidden, false);
+assert.strictEqual(items.left.children['.title'].textContent, '地图');
+assert.strictEqual(sockets[0].sent[0], 'launch:com.example/.Maps');
+sandbox.openApp({name:'视频', component:'com.example/.Video'});
+assert.strictEqual(items.right.hidden, false);
+assert.strictEqual(sockets[1].sent[3], 'launch:com.example/.Video');
+sandbox.openApp({name:'第三个', component:'com.example/.Third'});
+assert.match(items.message.textContent, /两个/);
+items.left.children['.min'].onclick();
+assert.strictEqual(items.left.hidden, true);
+sandbox.openApp({name:'地图', component:'com.example/.Maps'});
+assert.strictEqual(items.left.hidden, false);
+console.log('Desktop: app launch, window controls, streams and touch routing passed');
 
 let AudioPlayer;
 class AudioWorkletProcessor { constructor() { this.port = {}; } }
@@ -83,3 +100,4 @@ assert.strictEqual(audio.available, 4096 - 480);
 assert.strictEqual(l[100], 0.25);
 assert.strictEqual(r[100], -0.25);
 console.log('Audio worklet: stereo and 48 kHz to 44.1 kHz pacing passed');
+

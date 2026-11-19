@@ -6,6 +6,9 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
 import android.net.ConnectivityManager;
@@ -46,6 +49,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
     private final Set<Network> wifiNetworks = ConcurrentHashMap.newKeySet();
     private volatile boolean stopping;
     private volatile boolean starting;
+    private final AtomicIntegerArray displayIds = new AtomicIntegerArray(new int[]{-1, -1});
 
     @Override public IBinder onBind(Intent intent) { return null; }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -74,10 +78,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
     }
 
     private void startSplit(Intent intent) throws Exception {
-        if (intent == null) throw new Exception("请选择左右应用");
-        String left = checkedComponent(intent.getStringExtra("leftComponent"));
-        String right = checkedComponent(intent.getStringExtra("rightComponent"));
-        if (left.equals(right)) throw new Exception("请选择两个不同的应用");
+        if (intent == null) throw new Exception("无法读取连接设置");
         String size = intent.getStringExtra("size");
         int totalWidth = "800x1280".equals(size) ? 1280 : "1600x2560".equals(size) ? 2560 : 1920;
         int ratio = intent.getIntExtra("carRatio", 0);
@@ -112,9 +113,9 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
             connectivity.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), wifiCallback);
         }
         checkActive();
-        startDisplay(0, width, height, left);
+        startDisplay(0, width, height);
         checkActive();
-        startDisplay(1, width, height, right);
+        startDisplay(1, width, height);
         checkActive();
         new Thread(() -> readVideo(0), "split-video-left").start();
         new Thread(() -> readVideo(1), "split-video-right").start();
@@ -128,7 +129,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
         return component;
     }
 
-    private void startDisplay(int index, int width, int height, String component) throws Exception {
+    private void startDisplay(int index, int width, int height) throws Exception {
         checkActive();
         String scid = index == 0 ? "01234567" : "01234568";
         String command = "su shell -c 'CLASSPATH=" + BASE + "/scrcpy-server.jar /system/bin/app_process /system/bin "
@@ -142,7 +143,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
             if (stopping) { process.destroy(); throw new Exception("连接已取消"); }
             processes[index] = process;
         }
-        new Thread(() -> watchLog(process, index, component), "split-log-" + index).start();
+        new Thread(() -> watchLog(process, index), "split-log-" + index).start();
         String socketName = "scrcpy_" + scid;
         LocalSocket video = connect(socketName);
         synchronized (this) { if (stopping) { video.close(); throw new Exception("连接已取消"); } videos[index] = video; }
@@ -154,7 +155,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
         synchronized (this) { if (stopping) { control.close(); throw new Exception("连接已取消"); } controls[index] = control; }
     }
 
-    private void watchLog(Process process, int index, String component) {
+    private void watchLog(Process process, int index) {
         try (InputStream in = process.getInputStream()) {
             Pattern pattern = Pattern.compile("New display: .*?\\(id=(\\d+)\\)");
             StringBuilder text = new StringBuilder();
@@ -165,16 +166,7 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
                 Matcher match = pattern.matcher(text);
                 if (!started && match.find()) {
                     started = true; int id = Integer.parseInt(match.group(1));
-                    new Thread(() -> {
-                        try { if (!stopping) root("am start --display " + id + " -n '" + component + "'"); }
-                        catch (Exception e) {
-                            Log.e(TAG, "App launch failed", e);
-                            String message = (index == 0 ? "左侧" : "右侧") + "应用打开失败：" + e.getMessage();
-                            MirrorService.state = message;
-                            MirrorWebServer server = web;
-                            if (server != null) server.broadcastStatus(message);
-                        }
-                    }, "split-launch-" + index).start();
+                    displayIds.set(index, id);
                 }
                 if (text.length() > 4096) text.delete(0, text.length() - 2048);
             }
@@ -248,6 +240,45 @@ public final class SplitMirrorService extends Service implements MirrorWebServer
         if ("back".equals(action)) sendBack(1);
         return null;
     }
+    private List<ResolveInfo> availableApps() {
+        Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> apps = getPackageManager().queryIntentActivities(query, 0);
+        apps.removeIf(app -> app.activityInfo == null || getPackageName().equals(app.activityInfo.packageName));
+        apps.sort((a, b) -> a.loadLabel(getPackageManager()).toString().compareToIgnoreCase(b.loadLabel(getPackageManager()).toString()));
+        return apps;
+    }
+    private String componentOf(ResolveInfo app) {
+        return app.activityInfo.packageName + "/" + app.activityInfo.name;
+    }
+    @Override public String desktopApps() {
+        StringBuilder json = new StringBuilder("[");
+        for (ResolveInfo app : availableApps()) {
+            if (json.length() > 1) json.append(',');
+            json.append("{\"name\":").append(org.json.JSONObject.quote(app.loadLabel(getPackageManager()).toString()));
+            json.append(",\"component\":").append(org.json.JSONObject.quote(componentOf(app))).append('}');
+        }
+        return json.append(']').toString();
+    }
+    @Override public String onLaunch(boolean second, String component) {
+        try {
+            checkedComponent(component);
+            boolean found = false;
+            for (ResolveInfo app : availableApps()) if (componentOf(app).equals(component)) { found = true; break; }
+            if (!found) throw new Exception("应用不可用");
+            int id = displayIds.get(second ? 1 : 0);
+            if (id < 0) throw new Exception("桌面正在启动，请稍后重试");
+            new Thread(() -> {
+                try { if (!stopping) root("am start --display " + id + " -n '" + component + "'"); }
+                catch (Exception e) {
+                    Log.e(TAG, "App launch failed", e);
+                    MirrorWebServer server = web;
+                    if (server != null) server.broadcastStatus("应用打开失败：" + e.getMessage());
+                }
+            }, "desktop-launch").start();
+            return null;
+        } catch (Exception e) { return "{\"status\":" + org.json.JSONObject.quote(e.getMessage()) + "}"; }
+    }
+
     private void sendBack(int index) {
         LocalSocket socket = controls[index];
         if (socket == null) return;

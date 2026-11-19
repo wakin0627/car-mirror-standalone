@@ -32,6 +32,8 @@ final class MirrorWebServer {
         default void onSecondTouch(byte[] data) {}
         default String onSecondCommand(String action) { return null; }
         default void onVideoClientConnected(boolean second) {}
+        default String desktopApps() { return "[]"; }
+        default String onLaunch(boolean second, String component) { return null; }
     }
     private static final String TAG = "CarMirrorWeb";
     private static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -205,6 +207,11 @@ final class MirrorWebServer {
                     client.run();
                     return;
                 }
+                if (split && path.equals("/apps")) {
+                    byte[] body = listener.desktopApps().getBytes(StandardCharsets.UTF_8);
+                    String response = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
+                    out.write(response.getBytes(StandardCharsets.US_ASCII)); out.write(body); out.flush(); socket.close(); return;
+                }
                 String asset = path.equals("/audio-worklet.js") ? "audio-worklet.js" : split ? "split.html" : "index.html";
                 byte[] body = readAsset(asset);
                 String type = asset.endsWith(".js") ? "application/javascript" : "text/html";
@@ -322,6 +329,11 @@ final class MirrorWebServer {
                     if (opcode == 2) { if (second) listener.onSecondTouch(payload); else listener.onTouch(payload); }
                     if (opcode == 1) {
                         String text = new String(payload, StandardCharsets.UTF_8);
+                        if (split && text.startsWith("launch:")) {
+                            String result = listener.onLaunch(second, text.substring(7));
+                            if (result != null) sendText(result);
+                            continue;
+                        }
                         String action = text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("back") ? "back" : text.contains("getDisplayState") ? "getDisplayState" :
                                 text.contains("displayOff") ? "displayOff" : text.contains("displayOn") ? "displayOn" : "";
                         String response = second ? listener.onSecondCommand(action) : listener.onCommand(action);

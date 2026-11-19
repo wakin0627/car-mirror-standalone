@@ -72,9 +72,6 @@ public final class MainActivity extends Activity {
             if (MirrorService.active || SplitMirrorService.active) {
                 status.setText("请先断开当前连接"); return;
             }
-            if (splitMode.isChecked() && launchableApps.isEmpty()) {
-                status.setText("没有找到可启动的应用"); return;
-            }
             Intent start = new Intent(this, splitMode.isChecked() ? SplitMirrorService.class : MirrorService.class).setAction(MirrorService.ACTION_START);
             start.putExtra("size", size);
             start.putExtra("orientation", flip.isChecked() ? "@90" : "@270");
@@ -82,10 +79,6 @@ public final class MainActivity extends Activity {
             start.putExtra("virtualMode", virtualMode.isChecked());
             start.putExtra("windowDecorations", windowDecorations.isChecked());
             start.putExtra("carRatio", carRatio.getSelectedItemPosition());
-            if (splitMode.isChecked()) {
-                start.putExtra("leftComponent", component(launchableApps.get(leftApp.getSelectedItemPosition())));
-                start.putExtra("rightComponent", component(launchableApps.get(rightApp.getSelectedItemPosition())));
-            }
             startForegroundService(start);
             status.setText("正在启动");
         });
@@ -113,24 +106,8 @@ public final class MainActivity extends Activity {
         LinearLayout splitOptions = new LinearLayout(this);
         splitOptions.setOrientation(LinearLayout.VERTICAL);
         splitOptions.setVisibility(View.GONE);
-        Intent launchQuery = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-        launchableApps = new ArrayList<>(getPackageManager().queryIntentActivities(launchQuery, 0));
-        launchableApps.removeIf(app -> getPackageName().equals(app.activityInfo.packageName));
-        launchableApps.sort((a, b) -> a.loadLabel(getPackageManager()).toString().compareToIgnoreCase(b.loadLabel(getPackageManager()).toString()));
-        List<String> labels = new ArrayList<>();
-        for (ResolveInfo app : launchableApps) labels.add(app.loadLabel(getPackageManager()).toString());
-        ArrayAdapter<String> appAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels);
-        splitOptions.addView(label("左侧应用", 16, Color.DKGRAY));
-        leftApp = new Spinner(this); leftApp.setAdapter(appAdapter); splitOptions.addView(leftApp);
-        splitOptions.addView(label("右侧应用", 16, Color.DKGRAY));
-        rightApp = new Spinner(this); rightApp.setAdapter(appAdapter); splitOptions.addView(rightApp);
-        splitOptions.addView(label("首次建议使用低延迟画质。窗口可以拖动或调整大小；应用内容保持原比例。", 14, Color.GRAY));
+        splitOptions.addView(label("在车机桌面选择应用，最多同时打开两个窗口。窗口缩放暂时只改变画面大小。", 14, Color.GRAY));
         root.addView(splitOptions);
-        for (int i = 0; i < launchableApps.size(); i++) {
-            String pkg = launchableApps.get(i).activityInfo.packageName;
-            if (pkg.equals("com.autonavi.minimap")) leftApp.setSelection(i);
-            if (pkg.equals("tv.danmaku.bili")) rightApp.setSelection(i);
-        }
         root.addView(label("画质", 16, Color.DKGRAY));
         quality = new Spinner(this);
         String[] modes = {"标准：宽 1920", "低延迟：宽 1280", "高清：宽 2560"};
