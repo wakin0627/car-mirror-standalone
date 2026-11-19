@@ -36,6 +36,7 @@ public final class MainActivity extends Activity {
     private CheckBox flip;
     private CheckBox tabletMode;
     private CheckBox virtualMode;
+    private CheckBox windowDecorations;
     private final Runnable refreshTask = new Runnable() {
         @Override public void run() {
             if (status != null) status.setText(MirrorService.state);
@@ -67,6 +68,7 @@ public final class MainActivity extends Activity {
             start.putExtra("orientation", flip.isChecked() ? "@90" : "@270");
             start.putExtra("tabletMode", tabletMode.isChecked());
             start.putExtra("virtualMode", virtualMode.isChecked());
+            start.putExtra("windowDecorations", windowDecorations.isChecked());
             start.putExtra("carRatio", carRatio.getSelectedItemPosition());
             startForegroundService(start);
             status.setText("正在启动");
@@ -100,6 +102,10 @@ public final class MainActivity extends Activity {
         virtualMode.setText("车机独立屏幕（16:10，推荐）");
         virtualMode.setChecked(true);
         root.addView(virtualMode);
+        windowDecorations = new CheckBox(this);
+        windowDecorations.setText("尝试系统窗口边框（拖动和缩放，需系统支持）");
+        windowDecorations.setChecked(true);
+        root.addView(windowDecorations);
         flip = new CheckBox(this); flip.setText("画面倒置时使用此方向"); root.addView(flip);
         tabletMode = new CheckBox(this);
         tabletMode.setText("强制平板比例（可能导致手机触屏失准）");
@@ -109,11 +115,12 @@ public final class MainActivity extends Activity {
             flip.setEnabled(!checked);
             tabletMode.setEnabled(!checked);
             carRatio.setEnabled(checked);
+            windowDecorations.setEnabled(checked);
             if (checked) tabletMode.setChecked(false);
         });
         flip.setEnabled(false);
         tabletMode.setEnabled(false);
-        root.addView(label("车机网页点“应用列表”，选择左侧或右侧窗口再选应用；窗口模式取决于手机系统支持。需要镜像手机时可取消独立屏幕。网页点“开启车机声音”。", 14, Color.GRAY));
+        root.addView(label("车机网页点“应用列表”，选择左侧或右侧窗口再选应用。拖动和缩放由手机系统提供；若黑屏或窗口不正常，关闭系统窗口边框后重连。网页点“开启车机声音”。", 14, Color.GRAY));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
         setContentView(scroll);
