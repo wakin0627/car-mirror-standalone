@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
+import android.graphics.Point;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,11 +18,13 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Button;
 import java.util.ArrayList;
 import java.util.List;
 
 /** App picker shown on scrcpy's independent car display. */
 public final class CarLauncherActivity extends Activity {
+    private int windowMode = 0;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         PackageManager packages = getPackageManager();
@@ -33,11 +37,25 @@ public final class CarLauncherActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(20, 25, 32));
         TextView heading = new TextView(this);
-        heading.setText("车机应用");
+        heading.setText("车机桌面 · 选择应用");
         heading.setTextColor(Color.WHITE);
         heading.setTextSize(27);
         heading.setPadding(dp(24), dp(18), dp(24), dp(14));
         root.addView(heading);
+        LinearLayout modeRow = new LinearLayout(this);
+        TextView modeLabel = new TextView(this);
+        modeLabel.setTextColor(Color.WHITE);
+        modeLabel.setTextSize(16);
+        modeLabel.setText("打开方式：全屏");
+        Button fullscreen = new Button(this); fullscreen.setText("全屏");
+        Button left = new Button(this); left.setText("左侧窗口");
+        Button right = new Button(this); right.setText("右侧窗口");
+        fullscreen.setOnClickListener(v -> { windowMode = 0; modeLabel.setText("打开方式：全屏"); });
+        left.setOnClickListener(v -> { windowMode = 1; modeLabel.setText("打开方式：左侧窗口（实验）"); });
+        right.setOnClickListener(v -> { windowMode = 2; modeLabel.setText("打开方式：右侧窗口（实验）"); });
+        modeRow.addView(fullscreen); modeRow.addView(left); modeRow.addView(right);
+        root.addView(modeRow);
+        root.addView(modeLabel);
         GridView grid = new GridView(this);
         grid.setNumColumns(4);
         grid.setVerticalSpacing(dp(10));
@@ -78,7 +96,19 @@ public final class CarLauncherActivity extends Activity {
             try {
                 ActivityOptions options = ActivityOptions.makeBasic();
                 options.setLaunchDisplayId(getDisplay().getDisplayId());
-                startActivity(launch, options.toBundle());
+                Bundle bundle;
+                if (windowMode != 0) {
+                    Point size = new Point();
+                    getDisplay().getRealSize(size);
+                    int half = size.x / 2;
+                    options.setLaunchBounds(windowMode == 1
+                            ? new Rect(0, 0, half, size.y) : new Rect(half, 0, size.x, size.y));
+                    bundle = options.toBundle();
+                    if (bundle == null) bundle = new Bundle();
+                    // Android may reject or ignore freeform on displays that do not support it.
+                    bundle.putInt("android.activity.windowingMode", 5);
+                } else bundle = options.toBundle();
+                startActivity(launch, bundle);
             } catch (Exception e) {
                 Toast.makeText(this, "无法在车机屏幕打开：" + app.loadLabel(packages), Toast.LENGTH_LONG).show();
             }

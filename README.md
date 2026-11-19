@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### 车机桌面实验版
+
+[下载 CarDesktop-0.1.6-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.6-test/CarDesktop-0.1.6-test.apk)。此版基于本仓库的独立屏幕镜像版，使用 scrcpy 在手机创建车机虚拟屏；并非 CarWith 界面。先断开 CarWith 网页桥接，打开此版选择「车机独立屏幕」、连接后在车机浏览器打开网址。点网页「应用列表」，选「左侧窗口」并打开地图，再点「应用列表」，选「右侧窗口」并打开视频。
+
+左右窗口是实验功能，取决于手机和该虚拟屏是否允许自由窗口及各应用是否可调整大小。系统可能忽略窗口尺寸、只显示一个应用、拒绝启动或影响音频；小米 13 和车机上尚未验证。此 APK 与旧独立屏幕 App 同包名，安装将覆盖旧版；与 CarWith 网页桥接为不同 App。SHA-256：`F596A9B101FE86E3C9447C75879A66BBE5D58DB6D030C6691A16AA6AB9BF04F1`。
+
 Android App 内置 scrcpy 3.1 服务端、HTTPS 网页、视频转发、触控反控与系统音频转发。目标是手机安装 APK 后直接操作，无需在手机安装 Termux、Node.js，也无需每次通过电脑运行 ADB 命令。
 
 ## 下载

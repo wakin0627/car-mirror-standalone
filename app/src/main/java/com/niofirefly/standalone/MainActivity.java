@@ -50,7 +50,7 @@ public final class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(24), dp(32), dp(24), dp(24));
         root.setBackgroundColor(Color.rgb(247, 248, 250));
-        root.addView(label("车机投屏", 28, Color.rgb(24, 32, 45)));
+        root.addView(label("车机桌面（测试版）", 28, Color.rgb(24, 32, 45)));
         root.addView(label("手机连接车机 Wi-Fi 后，点连接；车机浏览器打开下方网址。", 16, Color.DKGRAY));
         status = label("未连接", 20, Color.rgb(38, 90, 160)); root.addView(status);
         address = label("", 18, Color.BLACK); root.addView(address);
@@ -113,7 +113,7 @@ public final class MainActivity extends Activity {
         });
         flip.setEnabled(false);
         tabletMode.setEnabled(false);
-        root.addView(label("独立屏幕会在车机上显示应用列表，不改变手机本身的分辨率。车机网页点一次“开启车机声音”。需要镜像手机时可取消独立屏幕。", 14, Color.GRAY));
+        root.addView(label("车机网页点“应用列表”，选择左侧或右侧窗口再选应用；窗口模式取决于手机系统支持。需要镜像手机时可取消独立屏幕。网页点“开启车机声音”。", 14, Color.GRAY));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
         setContentView(scroll);
