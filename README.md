@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### CarWith 网页桥接 0.1.5 测试版
+
+[下载 CarWithBrowser-0.1.5-test.4.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.5-test.4/CarWithBrowser-0.1.5-test.4.apk)。网页新增 30/60/120 帧显示上限，默认最高 120；浏览器按刷新节奏显示最新帧以减少积压。CarWith 原有帧率请求不变。实际显示帧率受视频源、车机屏幕刷新率和浏览器性能限制，不会凭空产生新的视频帧。
+
+900 项标准单元测试、24 项远程测试、网页测试、lint 和调试包构建通过；尚未在小米 13 Ultra 和车机验证。与 CarWith 网页桥接旧版签名一致。SHA-256：`A9851452617612495A191D55BFDDEB1FE140EBAF227380A726C8B53EE6F3152B`。
+
 ### CarWith 网页桥接 0.1.4 测试版
 
 [下载 CarWithBrowser-0.1.4-test.1.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.4-test.1/CarWithBrowser-0.1.4-test.1.apk)。本版默认请求 1920 宽、16:10，可选 1280/1920/2560 宽与 30/60 帧请求；最终分辨率和帧率由 CarWith 与车机决定。优化浏览器参数变化后的重新解码和网络拥塞后的关键帧恢复；网页支持全屏与裁边铺满，左下角显示实际尺寸和帧率。

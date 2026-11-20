@@ -11,6 +11,7 @@
   html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; display:flex; align-items:center; justify-content:center; }
   canvas { max-width:100vw; max-height:100vh; width:100%; height:100%; object-fit:contain; display:block; }
   #controls { position:fixed; z-index:2147483647; right:8px; top:8px; max-height:calc(100vh - 16px); display:flex; flex-direction:column; align-items:flex-end; gap:6px; overflow-y:auto; touch-action:pan-y; }
+  #renderFps { flex:none; min-height:40px; padding:7px 8px; border:1px solid #ffffffaa; border-radius:18px; background:#111e; color:#fff; font:14px sans-serif; }
   .topButton { flex:none; padding:9px 12px; min-height:40px; border:1px solid #ffffffaa; border-radius:18px; background:#111e; color:#fff; font:14px sans-serif; }
   #videoInfo { position:fixed; z-index:10000; left:8px; bottom:8px; padding:4px 7px; border-radius:5px; background:#111a; color:#fff; font:12px sans-serif; pointer-events:none; }
 </style>
@@ -18,6 +19,7 @@
 <body>
 <div id="controls"><button class="topButton" id="fullscreenBtn" type="button">全屏</button>
 <button class="topButton" id="audioBtn" type="button">开启车机声音</button>
+<select id="renderFps" aria-label="网页帧率上限"><option value="120">网页最高 120 帧</option><option value="60">网页最高 60 帧</option><option value="30">网页最高 30 帧</option></select>
 <button class="topButton" id="fitBtn" type="button">铺满屏幕（裁边）</button>
 <button class="topButton" id="disconnectBtn" type="button">断开投屏</button></div>
 <canvas id="v"></canvas>
@@ -27,6 +29,8 @@ const canvas = document.getElementById('v');
 const accessKey = new URLSearchParams(location.search).get('key') || '';
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const audioBtn = document.getElementById('audioBtn');
+const renderFps = document.getElementById('renderFps');
+for (const name of ['pointerdown', 'pointerup', 'pointermove']) renderFps.addEventListener(name, e => e.stopPropagation());
 const fitBtn = document.getElementById('fitBtn');
 const videoInfo = document.getElementById('videoInfo');
 const disconnectBtn = document.getElementById('disconnectBtn');
@@ -116,8 +120,39 @@ let cachedRect = null;
 let renderedFrames = 0;
 let videoWidth = 0;
 let videoHeight = 0;
+let pendingFrame = null;
+let paintScheduled = false;
+let lastPaintAt = -Infinity;
+let nextPaintAt = 0;
+renderFps.addEventListener('change', () => {
+  nextPaintAt = lastPaintAt + 1000 / Number(renderFps.value || 120);
+});
+function paintLatestFrame(now) {
+  const interval = 1000 / Number(renderFps.value || 120);
+  if (pendingFrame && now + 0.25 < nextPaintAt) {
+    requestAnimationFrame(paintLatestFrame);
+    return;
+  }
+  paintScheduled = false;
+  const frame = pendingFrame;
+  pendingFrame = null;
+  if (!frame) return;
+  try {
+    const fw = frame.displayWidth, fh = frame.displayHeight;
+    videoWidth = fw; videoHeight = fh;
+    if (canvas.width !== fw || canvas.height !== fh) {
+      canvas.width = fw; canvas.height = fh;
+      ctx.imageSmoothingEnabled = false;
+      updateRect();
+    }
+    ctx.drawImage(frame, 0, 0);
+    lastPaintAt = now;
+    nextPaintAt = (now - nextPaintAt > interval ? now : nextPaintAt) + interval;
+    renderedFrames++;
+  } finally { frame.close(); }
+}
 setInterval(() => {
-  if (videoWidth) videoInfo.textContent = videoWidth + '×' + videoHeight + ' · ' + renderedFrames + ' 帧/秒';
+  if (videoWidth) videoInfo.textContent = videoWidth + '×' + videoHeight + ' · ' + renderedFrames + ' 网页帧/秒';
   renderedFrames = 0;
 }, 1000);
 
@@ -129,6 +164,7 @@ function updateRect() {
 window.addEventListener('resize', updateRect, { passive: true });
 
 function initDecoder() {
+  if (pendingFrame) { pendingFrame.close(); pendingFrame = null; }
   if (decoder) {
     try { decoder.close(); } catch (e) {}
   }
@@ -136,20 +172,12 @@ function initDecoder() {
   waitingForKey = true;
   decoder = new VideoDecoder({
     output(frame) {
-      // Only drop frames when queue exceeds 1 to balance 20ms latency with micro-jitter tolerance
-      const fw = frame.displayWidth;
-      const fh = frame.displayHeight;
-      videoWidth = fw;
-      videoHeight = fh;
-      if (canvas.width !== fw || canvas.height !== fh) {
-        canvas.width = fw;
-        canvas.height = fh;
-        ctx.imageSmoothingEnabled = false;
-        updateRect();
+      if (pendingFrame) pendingFrame.close();
+      pendingFrame = frame;
+      if (!paintScheduled) {
+        paintScheduled = true;
+        requestAnimationFrame(paintLatestFrame);
       }
-      ctx.drawImage(frame, 0, 0);
-      frame.close();
-      renderedFrames++;
     },
     error() {
       // Auto-recover hardware decoder upon unexpected pipeline error using cached SPS/PPS

@@ -2,7 +2,7 @@
 
 本分支从 [mcarplay](https://github.com/wangxso/mcarplay) 的 MIT 许可源码派生，保留上游 `LICENSE`、`NOTICE` 和 `THIRD_PARTY_NOTICES.md`。新增浏览器模式：小米 CarWith/小米 CarLife 在手机本机生成车载画面，本 App 接收其七路本地 CarLife 通道，把 H.264 视频、PCM 音频通过 HTTPS/WebSocket 发给同一 Wi-Fi 上的车机浏览器，并把网页单点触控送回 CarWith。没有内置或修改小米、百度 APK。
 
-测试 APK：[CarWithBrowser-0.1.4-test.1.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.4-test.1/CarWithBrowser-0.1.4-test.1.apk)。本版默认请求 1920 宽与 16:10，可选择 30/60 帧；实际画质取决于 CarWith。优化浏览器解码参数切换和关键帧恢复，未在小米 13 Ultra 和车机实测。
+测试 APK：[CarWithBrowser-0.1.5-test.4.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.5-test.4/CarWithBrowser-0.1.5-test.4.apk)。网页支持 30/60/120 帧显示上限，默认 120；保留原有 CarWith 视频请求设置。显示帧率取决于视频源和车机，未在小米 13 Ultra 和车机实测。
 
 ## 使用范围
 

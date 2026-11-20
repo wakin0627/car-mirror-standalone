@@ -3,6 +3,20 @@
 Release notes are listed newest first. English is followed by Simplified Chinese.
 Test releases are experimental and do not establish real-vehicle compatibility.
 
+## [v0.1.5-test.4] - 2026-11-20
+
+### English
+- Add browser rendering limits of 30, 60, and 120 FPS, defaulting to 120, without changing the existing CarWith video requests.
+- Paint the latest decoded frame on the browser refresh cycle and release superseded frames to bound rendering backlog. Frame scheduling supports higher-refresh displays; the visible counter reports actual rendered frames.
+- Validation: 900 standard unit tests, 24 remote unit tests, browser rendering tests, Spotless, lint and debug assembly passed. No Xiaomi 13 Ultra or vehicle test was performed. The displayed FPS cannot exceed available source frames and browser/display refresh.
+
+### 简体中文
+- 新增网页显示帧率上限 30、60 和 120 帧，默认最高 120 帧，保持原有 CarWith 视频请求设置。
+- 按浏览器刷新周期绘制最新解码帧，并释放被替换的旧帧以减少绘制积压；兼容高刷新率屏幕，网页帧数显示实际绘制帧数。
+- 验证：900 项标准单元测试、24 项远程单元测试、网页绘制测试、Spotless、lint 和调试包构建通过；未在小米 13 Ultra 或实车测试。显示帧率无法超过输入视频帧数及浏览器、车机屏幕能力。
+
+[Compare changes](https://github.com/wakin0627/car-mirror-standalone/compare/v0.1.4-test.1...v0.1.5-test.4)
+
 ## [v0.1.4-test.1] - 2026-11-20
 
 ### English
