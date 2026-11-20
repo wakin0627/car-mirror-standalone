@@ -10,19 +10,16 @@
   * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
   html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; display:flex; align-items:center; justify-content:center; }
   canvas { max-width:100vw; max-height:100vh; width:100%; height:100%; object-fit:contain; display:block; }
-  .topButton { position:fixed; z-index:10000; right:12px; padding:8px 12px; border:1px solid #ffffff88; border-radius:18px; background:#111c; color:#fff; font:14px sans-serif; }
-  #fullscreenBtn { top:12px; }
-  #audioBtn { top:58px; }
-  #fitBtn { top:104px; }
-  #disconnectBtn { top:150px; }
+  #controls { position:fixed; z-index:2147483647; right:8px; top:8px; max-height:calc(100vh - 16px); display:flex; flex-direction:column; align-items:flex-end; gap:6px; overflow-y:auto; touch-action:pan-y; }
+  .topButton { flex:none; padding:9px 12px; min-height:40px; border:1px solid #ffffffaa; border-radius:18px; background:#111e; color:#fff; font:14px sans-serif; }
   #videoInfo { position:fixed; z-index:10000; left:8px; bottom:8px; padding:4px 7px; border-radius:5px; background:#111a; color:#fff; font:12px sans-serif; pointer-events:none; }
 </style>
 </head>
 <body>
-<button class="topButton" id="fullscreenBtn" type="button">全屏</button>
+<div id="controls"><button class="topButton" id="fullscreenBtn" type="button">全屏</button>
 <button class="topButton" id="audioBtn" type="button">开启车机声音</button>
 <button class="topButton" id="fitBtn" type="button">铺满屏幕（裁边）</button>
-<button class="topButton" id="disconnectBtn" type="button">断开投屏</button>
+<button class="topButton" id="disconnectBtn" type="button">断开投屏</button></div>
 <canvas id="v"></canvas>
 <div id="videoInfo">等待画面</div>
 <script>
@@ -112,6 +109,7 @@ let decoder = null;
 let configured = false;
 let waitingForKey = true;
 let configData = null;
+let lastKeyRequestAt = 0;
 let lastCodecStr = '';
 let ts = 0;
 let cachedRect = null;
@@ -168,8 +166,14 @@ function initDecoder() {
 
 initDecoder();
 
+function requestKeyframe() {
+  const now = Date.now();
+  if (now - lastKeyRequestAt < 1000 || ws.readyState !== WebSocket.OPEN) return;
+  lastKeyRequestAt = now;
+  ws.send(JSON.stringify({action:'requestKeyFrame'}));
+}
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) waitingForKey = true;
+  if (!document.hidden) { waitingForKey = true; requestKeyframe(); }
 });
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -191,7 +195,9 @@ ws.onmessage = (ev) => {
   const payload = buf.subarray(2);
 
   if (isConfig) {
-    configData = payload;
+    const changed = !configData || configData.length !== payload.length || configData.some((value, i) => value !== payload[i]);
+    configData = payload.slice();
+    if (changed && configured) { initDecoder(); requestKeyframe(); }
     let offset = 0;
     while (offset < payload.length - 4) {
       if (payload[offset] === 0 && payload[offset+1] === 0 && (payload[offset+2] === 1 || (payload[offset+2] === 0 && payload[offset+3] === 1))) {
@@ -226,6 +232,7 @@ ws.onmessage = (ev) => {
       decoder.configure({ codec: lastCodecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
     } catch (e) {}
     waitingForKey = true;
+    requestKeyframe();
   }
 
   if (waitingForKey) {
@@ -234,7 +241,7 @@ ws.onmessage = (ev) => {
   }
 
   try {
-    ts += 16666;
+    ts = Math.max(ts + 1, Math.round(performance.now() * 1000));
     if (isKey && configData) {
       const merged = new Uint8Array(configData.length + payload.length);
       merged.set(configData, 0);
@@ -245,6 +252,7 @@ ws.onmessage = (ev) => {
     }
   } catch (e) {
     waitingForKey = true;
+    requestKeyframe();
   }
 };
 

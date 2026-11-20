@@ -40,6 +40,7 @@ final class MirrorWebServer {
     private volatile boolean running;
     private volatile byte[] configPacket;
     private volatile byte[] lastKeyframe;
+    private long lastKeyRequestMs;
 
     MirrorWebServer(Context context, Listener listener, String token, String pin) {
         this.context = context; this.listener = listener; this.token = token; this.pin = pin;
@@ -76,7 +77,7 @@ final class MirrorWebServer {
     }
 
     void broadcastVideo(byte[] packet, boolean config, boolean key) {
-        if (config) configPacket = packet;
+        if (config) { configPacket = packet; lastKeyframe = null; }
         if (key) lastKeyframe = packet;
         for (Client client : clients) if (!client.audio) client.offerVideo(packet, config, key);
     }
@@ -84,6 +85,12 @@ final class MirrorWebServer {
         configPacket = null;
         lastKeyframe = null;
         for (Client client : clients) if (!client.audio) client.close();
+    }
+    private synchronized void requestVideoKeyframe() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - lastKeyRequestMs < 1000 && lastKeyRequestMs != 0) return;
+        lastKeyRequestMs = now;
+        new Thread(() -> listener.onCommand("requestKeyFrame"), "carwith-keyframe").start();
     }
     void broadcastAudio(byte[] packet) {
         for (Client client : clients) if (client.audio) client.offerAudio(packet);
@@ -171,6 +178,7 @@ final class MirrorWebServer {
                         BrowserBridgeService.state = BrowserBridgeService.videoReady ? "车机已连接" : "车机网页已连接，等待 CarWith 画面";
                         if (configPacket != null) client.offerVideo(configPacket, true, false);
                         if (lastKeyframe != null) client.offerVideo(lastKeyframe, false, true);
+                        requestVideoKeyframe();
                     }
                     client.run();
                     return;
@@ -258,15 +266,18 @@ final class MirrorWebServer {
             this.queue = new ArrayBlockingQueue<>(audio ? 16 : 6);
         }
         void offerVideo(byte[] packet, boolean config, boolean key) {
-            if (key) dropping = false;
-            if (config && dropping) return;
-            if (dropping) return;
+            if (dropping) {
+                if (!key) return;
+                dropping = false;
+                queue.clear();
+                if (configPacket != null) queue.offer(frame((byte) 2, configPacket));
+            }
             if (!queue.offer(frame((byte) 2, packet))) {
                 queue.clear(); dropping = !key;
                 if (key) {
                     if (configPacket != null) queue.offer(frame((byte) 2, configPacket));
                     queue.offer(frame((byte) 2, packet));
-                }
+                } else requestVideoKeyframe();
             }
         }
         void offerAudio(byte[] packet) {
@@ -300,7 +311,7 @@ final class MirrorWebServer {
                     if (opcode == 2) listener.onTouch(payload);
                     if (opcode == 1) {
                         String text = new String(payload, StandardCharsets.UTF_8);
-                        String action = text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("getDisplayState") ? "getDisplayState" :
+                        String action = text.contains("requestKeyFrame") ? "requestKeyFrame" : text.contains("disconnect") ? "disconnect" : text.contains("launcher") ? "launcher" : text.contains("getDisplayState") ? "getDisplayState" :
                                 text.contains("displayOff") ? "displayOff" : text.contains("displayOn") ? "displayOn" : "";
                         String response = listener.onCommand(action);
                         if (response != null) sendText(response);

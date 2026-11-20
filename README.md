@@ -6,6 +6,12 @@
 
 ## 原有屏幕镜像版
 
+### CarWith 网页桥接 0.1.4 测试版
+
+[下载 CarWithBrowser-0.1.4-test.1.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.4-test.1/CarWithBrowser-0.1.4-test.1.apk)。本版默认请求 1920 宽、16:10，可选 1280/1920/2560 宽与 30/60 帧请求；最终分辨率和帧率由 CarWith 与车机决定。优化浏览器参数变化后的重新解码和网络拥塞后的关键帧恢复；网页支持全屏与裁边铺满，左下角显示实际尺寸和帧率。
+
+需要手机上已安装小米 CarWith 与小米 CarLife，手机和车机连接同一 Wi-Fi。功能经过自动测试，仍需在小米 13 Ultra 和车机上验证。APK 与 CarWith 网页桥接 0.1.3 使用相同签名；它与独立屏幕 App 是不同应用。SHA-256：`A3A50BD71084DEECF7C1CF12C57786E221FA5FF97980007B78A6A0F5BEDC39E0`。
+
 ### MagicDesk 投屏实验版 0.1.12
 
 [下载 CarDesktop-0.1.12-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.12-test/CarDesktop-0.1.12-test.apk)。恢复固定可见的网页控制按钮，音频捕获不再因开头 15 秒没有数据而超时；新增 30/60/90/120 FPS 上限设置，并改善 Wi-Fi 保活和网络切换时的服务行为。连接 MagicDesk 屏幕时默认允许 2560 宽编码。请在车机网页点击「开启车机声音」。

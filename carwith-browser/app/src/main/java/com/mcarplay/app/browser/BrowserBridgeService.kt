@@ -6,9 +6,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.IBinder
 import android.os.PowerManager
-import android.net.wifi.WifiManager
 import android.util.Log
 import com.mcarplay.app.audio.AudioDuckingMixer
 import com.mcarplay.app.audio.PcmResampler
@@ -82,19 +82,21 @@ class BrowserBridgeService :
         state = "正在启动 CarWith 网页桥接"
         val width = intent?.getIntExtra("width", 1280)?.takeIf { it in 640..2560 } ?: 1280
         val ratio = intent?.getIntExtra("ratio", 0) ?: 0
+        val fps = intent?.getIntExtra("fps", 60)?.takeIf { it == 30 || it == 60 } ?: 60
         val height =
             when (ratio) {
                 1 -> width * 9 / 16
                 2 -> width / 2
                 else -> width * 5 / 8
             }
-        Thread({ startBridge(width, height) }, "carwith-browser-start").start()
+        Thread({ startBridge(width, height, fps) }, "carwith-browser-start").start()
         return START_STICKY
     }
 
     private fun startBridge(
         width: Int,
         height: Int,
+        fps: Int,
     ) {
         try {
             val server = MirrorWebServer(this, this, token, pin)
@@ -109,7 +111,7 @@ class BrowserBridgeService :
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CarWithBrowser:bridge").also { it.acquire() }
             val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
             wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "CarWithBrowser:wifi").also { it.acquire() }
-            startCarWithSession(width, height)
+            startCarWithSession(width, height, fps)
             if (stopping) return
             audioFlusher =
                 Thread({
@@ -132,35 +134,46 @@ class BrowserBridgeService :
         }
     }
 
-    private fun startCarWithSession(width: Int, height: Int) {
-            val client =
-                CarLifeSession(
-                    application = application,
-                    onAccessUnit = ::relayVideo,
-                    onAudioEvent = ::relayAudio,
-                    onEnded = { reason ->
-                        if (!stopping) {
-                            state = "CarWith 连接中断，正在重连：$reason"
-                            videoReady = false
-                            videoFrames = 0
-                            lastCodecConfig = null
-                            web?.resetVideo()
-                            synchronized(audioLock) { resamplers.clear(); mixer.reset() }
-                            val delayMs = (5000L shl retryCount.coerceAtMost(3)).coerceAtMost(30000L)
-                            retryCount++
-                            Thread({
-                                try { Thread.sleep(delayMs) } catch (_: InterruptedException) { return@Thread }
-                                if (!stopping) startCarWithSession(width, height)
-                            }, "carwith-browser-reconnect").start()
+    private fun startCarWithSession(
+        width: Int,
+        height: Int,
+        fps: Int,
+    ) {
+        val client =
+            CarLifeSession(
+                application = application,
+                onAccessUnit = ::relayVideo,
+                onAudioEvent = ::relayAudio,
+                onEnded = { reason ->
+                    if (!stopping) {
+                        state = "CarWith 连接中断，正在重连：$reason"
+                        videoReady = false
+                        videoFrames = 0
+                        lastCodecConfig = null
+                        web?.resetVideo()
+                        synchronized(audioLock) {
+                            resamplers.clear()
+                            mixer.reset()
                         }
-                    },
-                    log = { message -> Log.i("CarWithBrowser", message) },
-                    requestedVideoSize = width to height,
-                    requestedFps = 60,
-                )
-            session = client
-            if (stopping) return
-            if (client.start() && !stopping) state = "等待 CarWith 画面；车机可打开网页"
+                        val delayMs = (5000L shl retryCount.coerceAtMost(3)).coerceAtMost(30000L)
+                        retryCount++
+                        Thread({
+                            try {
+                                Thread.sleep(delayMs)
+                            } catch (_: InterruptedException) {
+                                return@Thread
+                            }
+                            if (!stopping) startCarWithSession(width, height, fps)
+                        }, "carwith-browser-reconnect").start()
+                    }
+                },
+                log = { message -> Log.i("CarWithBrowser", message) },
+                requestedVideoSize = width to height,
+                requestedFps = fps,
+            )
+        session = client
+        if (stopping) return
+        if (client.start() && !stopping) state = "等待 CarWith 画面；车机可打开网页"
     }
 
     private fun relayVideo(unit: CarLifeVideoAccessUnit) {
@@ -234,6 +247,7 @@ class BrowserBridgeService :
 
     override fun onCommand(action: String?): String? {
         if (action == "disconnect") stopSelf()
+        if (action == "requestKeyFrame") session?.requestKeyFrame()
         if (action == "getDisplayState") return "{\"display\":\"on\"}"
         return null
     }

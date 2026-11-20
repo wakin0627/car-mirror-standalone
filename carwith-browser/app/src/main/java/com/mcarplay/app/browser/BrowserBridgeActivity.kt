@@ -28,6 +28,7 @@ class BrowserBridgeActivity : Activity() {
     private lateinit var pin: TextView
     private lateinit var quality: Spinner
     private lateinit var ratio: Spinner
+    private lateinit var fps: Spinner
     private val refresh =
         object : Runnable {
             override fun run() {
@@ -51,9 +52,13 @@ class BrowserBridgeActivity : Activity() {
         address = label("", 18, Color.BLACK).also(root::addView)
         pin = label("配对码：${BrowserBridgeService.pin}", 20, Color.rgb(38, 90, 160)).also(root::addView)
         root.addView(label("画质", 16, Color.DKGRAY))
-        quality = spinner("低延迟：宽 1280", "标准：宽 1920", "萤火虫原屏：2560×1600（16:10）").also(root::addView)
+        quality = spinner("流畅：请求宽 1280", "清晰：请求宽 1920（推荐）", "超清：请求宽 2560（兼容性测试）").also(root::addView)
+        quality.setSelection(1)
         root.addView(label("车机比例", 16, Color.DKGRAY))
-        ratio = spinner("16:10", "16:9", "2:1").also(root::addView)
+        ratio = spinner("16:10（萤火虫）", "16:9", "2:1").also(root::addView)
+        root.addView(label("帧率请求", 16, Color.DKGRAY))
+        fps = spinner("60 帧（推荐）", "30 帧（兼容）").also(root::addView)
+        root.addView(label("实际分辨率和帧率由 CarWith 与车机决定，网页左下角显示实际画面。", 14, Color.GRAY))
         button(root, "连接，显示 CarWith 画面") {
             if (currentUrl() == null) {
                 startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
@@ -61,8 +66,16 @@ class BrowserBridgeActivity : Activity() {
             }
             val service = Intent(this, BrowserBridgeService::class.java).setAction(BrowserBridgeService.ACTION_START)
             val selectedQuality = quality.selectedItemPosition
-            service.putExtra("width", when (selectedQuality) { 0 -> 1280; 1 -> 1920; else -> 2560 })
-            service.putExtra("ratio", if (selectedQuality == 2) 0 else ratio.selectedItemPosition)
+            service.putExtra(
+                "width",
+                when (selectedQuality) {
+                    0 -> 1280
+                    1 -> 1920
+                    else -> 2560
+                },
+            )
+            service.putExtra("ratio", ratio.selectedItemPosition)
+            service.putExtra("fps", if (fps.selectedItemPosition == 0) 60 else 30)
             startForegroundService(service)
             status.text = "正在启动"
         }

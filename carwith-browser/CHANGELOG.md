@@ -3,6 +3,22 @@
 Release notes are listed newest first. English is followed by Simplified Chinese.
 Test releases are experimental and do not establish real-vehicle compatibility.
 
+## [v0.1.4-test.1] - 2026-11-20
+
+### English
+- Improve the browser bridge video recovery: request a fresh keyframe when a viewer connects or the video queue overflows, clear obsolete cached keyframes after configuration changes, and recreate the browser decoder when SPS/PPS changes.
+- Default to requesting 1920-pixel width and 16:10; offer 1280/1920/2560 and 30/60 FPS requests. Actual dimensions and frame rate depend on CarWith and the receiver. Keep touch coordinates correct for contain and crop-to-fill layouts.
+- Keep fullscreen, audio and fit controls accessible; render at the actual source size without claiming that a requested size is guaranteed.
+- Validation: 899 standard unit tests, 24 remote unit tests, the focused congestion test, browser-page test, Spotless, lint and debug assembly passed. Actual Xiaomi 13 Ultra and vehicle behavior has not been verified.
+
+### 简体中文
+- 改进网页桥接的视频恢复：浏览器连接或视频队列拥塞时请求关键帧；参数变化时清除过期关键帧，并在 SPS/PPS 改变时重新创建解码器。
+- 默认请求 1920 宽、16:10；提供 1280/1920/2560 与 30/60 帧请求选项。实际尺寸和帧率取决于 CarWith 和车机；完整画面和裁边铺满均维持正确触控坐标。
+- 保持全屏、声音与画面适配按钮可见，显示真实画面尺寸，不承诺请求尺寸一定生效。
+- 验证：899 项标准单元测试、24 项远程单元测试、单独的拥塞测试、网页测试、Spotless、lint 和调试包构建通过；尚未在小米 13 Ultra 和实车验证。
+
+[Compare changes](https://github.com/wakin0627/car-mirror-standalone/compare/carwith-v0.1.3-test...v0.1.4-test.1)
+
 ## [v0.1.6] - 2026-11-06
 
 > Stable release collecting the screen-ownership, main-audio arbitration, phone SDP recovery, CarWith entry-diagnostics and an auto-play music switch since v0.1.5-test.3. A user-reported DiPlay + Xiaomi 17 Pro Max run was without issues; that report did not record the build, component versions or which media items were checked. The screen and audio candidates were not tried in a vehicle, WinPlay and macplay regressions are still pending, and a Chery Arrizo 8 re-entry issue is under investigation (see Known issue). This does not establish real-vehicle compatibility.
