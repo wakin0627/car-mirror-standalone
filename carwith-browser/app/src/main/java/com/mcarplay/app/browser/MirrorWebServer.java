@@ -267,7 +267,10 @@ final class MirrorWebServer {
         }
         void offerVideo(byte[] packet, boolean config, boolean key) {
             if (dropping) {
-                if (!key) return;
+                if (!key) {
+                    if (!config) requestVideoKeyframe();
+                    return;
+                }
                 dropping = false;
                 queue.clear();
                 if (configPacket != null) queue.offer(frame((byte) 2, configPacket));

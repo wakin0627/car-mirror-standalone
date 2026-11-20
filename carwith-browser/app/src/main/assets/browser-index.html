@@ -198,6 +198,7 @@ function initDecoder() {
         try {
           decoder.configure({ codec: lastCodecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
           configured = true;
+          requestKeyframe();
         } catch (e) {}
       }
     }
@@ -266,8 +267,8 @@ ws.onmessage = (ev) => {
   receivedFrames++;
 
   // Prevent 1-2s screen freeze during minor Wi-Fi jitter:
-  // Use threshold of 12 with clean decoder reset instead of prematurely dropping P-frames
-  if (decoder.decodeQueueSize > 6) {
+  // Tolerate short bursts before resetting a slow decoder; never drop dependent frames independently.
+  if (!waitingForKey && decoder.decodeQueueSize > 12) {
     try {
       decoder.reset();
       decoder.configure({ codec: lastCodecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
@@ -277,7 +278,7 @@ ws.onmessage = (ev) => {
   }
 
   if (waitingForKey) {
-    if (!isKey) return;
+    if (!isKey) { requestKeyframe(); return; }
     waitingForKey = false;
   }
 
