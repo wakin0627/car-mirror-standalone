@@ -3,6 +3,18 @@
 Release notes are listed newest first. English is followed by Simplified Chinese.
 Test releases are experimental and do not establish real-vehicle compatibility.
 
+## [v1.0.2] - 2026-11-20
+
+### English
+- Allow small display-timing fluctuations in the browser frame limiter and show received, decoded and displayed frames per second for diagnosis.
+- Validation: browser-page tests passed, including a 60 Hz jitter simulation. Vehicle verification remains pending.
+
+### 简体中文
+- 网页帧率限制容忍小幅刷新时间波动，并显示接收、解码和显示帧率，便于定位卡顿。
+- 验证：网页测试通过，包含 60 Hz 刷新时间波动模拟；仍需实车验证。
+
+[Compare changes](https://github.com/wakin0627/car-mirror-standalone/compare/v1.0.1...v1.0.2)
+
 ## [v1.0.1] - 2026-11-20
 
 ### English

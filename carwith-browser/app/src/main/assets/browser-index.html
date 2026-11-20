@@ -118,6 +118,9 @@ let lastCodecStr = '';
 let ts = 0;
 let cachedRect = null;
 let renderedFrames = 0;
+let receivedFrames = 0;
+let decodedFrames = 0;
+let statsAt = performance.now();
 let videoWidth = 0;
 let videoHeight = 0;
 let pendingFrame = null;
@@ -129,7 +132,9 @@ renderFps.addEventListener('change', () => {
 });
 function paintLatestFrame(now) {
   const interval = 1000 / Number(renderFps.value || 120);
-  if (pendingFrame && now + 0.25 < nextPaintAt) {
+  // Browser vsync timestamps fluctuate around the nominal interval. A small
+  // tolerance prevents a 60 Hz display from accidentally rendering at 30 Hz.
+  if (pendingFrame && now + 2 < nextPaintAt) {
     requestAnimationFrame(paintLatestFrame);
     return;
   }
@@ -152,7 +157,13 @@ function paintLatestFrame(now) {
   } finally { frame.close(); }
 }
 setInterval(() => {
-  if (videoWidth) videoInfo.textContent = videoWidth + '×' + videoHeight + ' · ' + renderedFrames + ' 网页帧/秒';
+  const now = performance.now();
+  const seconds = Math.max((now - statsAt) / 1000, 0.001);
+  if (videoWidth) videoInfo.textContent = videoWidth + '×' + videoHeight + ' · 接收/解码/显示 ' +
+    [receivedFrames, decodedFrames, renderedFrames].map(n => Math.round(n / seconds)).join('/') + ' 帧/秒';
+  statsAt = now;
+  receivedFrames = 0;
+  decodedFrames = 0;
   renderedFrames = 0;
 }, 1000);
 
@@ -172,6 +183,7 @@ function initDecoder() {
   waitingForKey = true;
   decoder = new VideoDecoder({
     output(frame) {
+      decodedFrames++;
       if (pendingFrame) pendingFrame.close();
       pendingFrame = frame;
       if (!paintScheduled) {
@@ -251,6 +263,7 @@ ws.onmessage = (ev) => {
   }
 
   if (!configured || decoder.state !== 'configured') return;
+  receivedFrames++;
 
   // Prevent 1-2s screen freeze during minor Wi-Fi jitter:
   // Use threshold of 12 with clean decoder reset instead of prematurely dropping P-frames
