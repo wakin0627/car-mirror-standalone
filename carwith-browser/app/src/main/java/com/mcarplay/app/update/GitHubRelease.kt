@@ -28,7 +28,7 @@ data class GitHubRelease(
 }
 
 object UpdateSource {
-    const val REPOSITORY = "wangxso/mcarplay"
+    const val REPOSITORY = "wakin0627/car-mirror-standalone"
     const val RELEASES_URL = "https://github.com/$REPOSITORY/releases"
     const val API_URL = "https://api.github.com/repos/$REPOSITORY/releases?per_page=20"
     const val STABLE_API_URL = "https://api.github.com/repos/$REPOSITORY/releases/latest"
@@ -99,7 +99,13 @@ object UpdateSource {
                 (0 until assets.length()).mapNotNull { index ->
                     assets.optJSONObject(index)?.let { asset(it, version.tag) }
                 }
-            val names = setOf("mcarplay-${version.base}.apk", "mcarplay-${version.tag.removePrefix("v")}.apk")
+            val names =
+                setOf(
+                    "CarWithBrowser-${version.base}.apk",
+                    "CarWithBrowser-${version.base}-debug.apk",
+                    "CarWithBrowser-${version.tag.removePrefix("v")}.apk",
+                    "CarWithBrowser-${version.tag.removePrefix("v")}-debug.apk",
+                )
             val apks = parsed.filter { it.name in names && it.size in 1..MAX_APK_BYTES }
             if (apks.size != 1) continue
             val checksums = parsed.singleOrNull { it.name == "SHA256SUMS.txt" && it.size in 1..65_536 }

@@ -17,6 +17,7 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import com.mcarplay.app.carlife.CarLifeLauncher
+import com.mcarplay.app.update.UpdateActivity
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -87,6 +88,9 @@ class BrowserBridgeActivity : Activity() {
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("CarWith 网页桥接", url))
             }
+        }
+        button(root, "检查更新") {
+            startActivity(Intent(this, UpdateActivity::class.java))
         }
         button(root, "设置后台运行权限") {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))

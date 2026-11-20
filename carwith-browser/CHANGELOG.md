@@ -3,6 +3,20 @@
 Release notes are listed newest first. English is followed by Simplified Chinese.
 Test releases are experimental and do not establish real-vehicle compatibility.
 
+## [v1.0.1] - 2026-11-20
+
+### English
+- Add an in-app update entry for the CarWith browser bridge, pointing to this repository. It checks versions and lets users download and install an update through Android's installer.
+- Restrict update assets to this repository and the CarWithBrowser package naming scheme. Verify SHA-256, package identity, version and signing certificate before installation. User approval is still required in Android.
+- Validation: 901 standard unit tests, 24 remote unit tests, browser-page tests, Spotless, lint, and debug assembly passed. Device-specific installation has not yet been verified.
+
+### 简体中文
+- 为 CarWith 网页桥接增加软件内检查更新入口，连接本仓库查询版本，可下载更新并调用安卓安装程序。
+- 限定更新地址和安装包名称，安装前校验 SHA-256、包名、版本与签名；安卓安装仍须用户确认。
+- 验证：901 项标准单元测试、24 项远程单元测试、网页测试、Spotless、lint 和调试包构建通过；实际设备上的更新安装尚未验证。
+
+[Compare changes](https://github.com/wakin0627/car-mirror-standalone/compare/v1.0.0...v1.0.1)
+
 ## [v1.0.0] - 2026-11-20
 
 ### English

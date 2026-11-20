@@ -18,6 +18,7 @@ import androidx.core.widget.doAfterTextChanged
 import com.mcarplay.app.BuildConfig
 import com.mcarplay.app.R
 import com.mcarplay.app.SessionController
+import com.mcarplay.app.browser.BrowserBridgeService
 import com.mcarplay.app.carlife.CarLifeDiagnostics
 import com.mcarplay.app.i18n.AppLanguage
 import com.mcarplay.app.ui.EdgeToEdge
@@ -100,7 +101,11 @@ class UpdateActivity : AppCompatActivity() {
     }
 
     private fun connectionIdle(): Boolean {
-        if (SessionController.isSessionRunning() || SessionController.sessionStarting.get() || CarLifeDiagnostics.isRunning()) {
+        if (BrowserBridgeService.active ||
+            SessionController.isSessionRunning() ||
+            SessionController.sessionStarting.get() ||
+            CarLifeDiagnostics.isRunning()
+        ) {
             status.setText(R.string.update_connection_active)
             return false
         }
@@ -108,7 +113,7 @@ class UpdateActivity : AppCompatActivity() {
     }
 
     private fun requestCheck() {
-        if (busy || !connectionIdle()) return
+        if (busy) return
         candidate = null
         verified = null
         notes.text = ""

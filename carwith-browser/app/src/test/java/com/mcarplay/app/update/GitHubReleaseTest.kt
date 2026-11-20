@@ -8,6 +8,16 @@ import org.junit.Test
 
 class GitHubReleaseTest {
     @Test
+    fun recognisesOurPublishedStableDebugArtifactAndRejectsOtherProjects() {
+        val own = releaseJson("v1.0.1").toString()
+        val release = requireNotNull(UpdateSource.latest(JSONArray().put(org.json.JSONObject(own)).toString(), false))
+        assertEquals("CarWithBrowser-1.0.1-debug.apk", release.apk.name)
+        val upstream = releaseJson("v1.0.1")
+        upstream.getJSONArray("assets").getJSONObject(0).put("name", "mcarplay-1.0.1.apk")
+        assertNull(UpdateSource.latest(JSONArray().put(upstream).toString(), false))
+    }
+
+    @Test
     fun choosesHighestVersionRegardlessOfResponseOrder() {
         val json = JSONArray().put(releaseJson("v0.1.2-test.10")).put(releaseJson("v0.1.1")).put(releaseJson("v0.1.2-test.2"))
         assertEquals("v0.1.2-test.10", UpdateSource.latest(json.toString(), true)?.version?.tag)
@@ -37,7 +47,7 @@ class GitHubReleaseTest {
     fun rejectsMissingOrAmbiguousApks() {
         val json = releaseJson()
         val assets = json.getJSONArray("assets")
-        assets.put(assetJson("v0.1.2-test.1", "mcarplay-0.1.2-test.1.apk"))
+        assets.put(assetJson("v0.1.2-test.1", "CarWithBrowser-0.1.2.apk"))
         assertNull(UpdateSource.latest(JSONArray().put(json).toString(), true))
         json.put("assets", JSONArray())
         assertNull(UpdateSource.latest(JSONArray().put(json).toString(), true))
@@ -71,7 +81,7 @@ class GitHubReleaseTest {
     fun derivesReleasePageAndBoundsNotesInsteadOfUsingUntrustedHtmlUrl() {
         val json = releaseJson().put("html_url", "https://attacker.invalid").put("body", "x".repeat(30_000))
         val release = requireNotNull(UpdateSource.latest(JSONArray().put(json).toString(), true))
-        assertEquals("https://github.com/wangxso/mcarplay/releases/tag/v0.1.2-test.1", release.pageUrl)
+        assertEquals("https://github.com/wakin0627/car-mirror-standalone/releases/tag/v0.1.2-test.1", release.pageUrl)
         assertEquals(24_000, release.notes.length)
     }
 

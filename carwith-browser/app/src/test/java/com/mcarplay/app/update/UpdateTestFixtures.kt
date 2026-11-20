@@ -11,7 +11,7 @@ internal fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-2
 
 internal fun assetJson(
     tag: String,
-    name: String = "mcarplay-${requireNotNull(ReleaseVersion.parse(tag)).base}.apk",
+    name: String = "CarWithBrowser-${requireNotNull(ReleaseVersion.parse(tag)).base}-debug.apk",
     bytes: ByteArray = "test apk".toByteArray(),
 ): JSONObject =
     JSONObject()

@@ -15,7 +15,7 @@
     <string name="update_source_failed">Could not open the install-source setting. Allow it in system settings and try again.</string>
     <string name="update_cancelling">Cancelling… the partial file is deleted once the network wait ends.</string>
     <string name="update_browser_failed">Could not open a browser. Visit %1$s manually.</string>
-    <string name="update_connection_active">Disconnect CarPlay and stop the CarWith self-test before updating, so the head unit is not interrupted.</string>
+    <string name="update_connection_active">Disconnect the vehicle browser or CarPlay session and stop the CarWith self-test before downloading or installing updates.</string>
     <string name="update_checking">Checking GitHub for updates…</string>
     <string name="update_no_release">No installable release with an APK and checksum was found on this channel. You can open the Releases page.</string>
     <string name="update_new_preview">New version %1$s available (prerelease)</string>

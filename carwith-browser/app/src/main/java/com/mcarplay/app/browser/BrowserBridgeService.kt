@@ -42,6 +42,10 @@ class BrowserBridgeService :
         @JvmField
         @Volatile
         var browserConnected = false
+
+        @JvmField
+        @Volatile
+        var active = false
     }
 
     @Volatile
@@ -78,6 +82,7 @@ class BrowserBridgeService :
         }
         if (starting || web != null) return START_STICKY
         starting = true
+        active = true
         showNotification()
         state = "正在启动 CarWith 网页桥接"
         val width = intent?.getIntExtra("width", 1280)?.takeIf { it in 640..2560 } ?: 1280
@@ -269,6 +274,7 @@ class BrowserBridgeService :
 
     override fun onDestroy() {
         stopping = true
+        active = false
         audioFlusher?.interrupt()
         audioFlusher = null
         videoReady = false

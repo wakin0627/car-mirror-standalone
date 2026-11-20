@@ -17,7 +17,7 @@ class UpdateHttpTest {
             release.apk.url.replace("github.com", "github.com:443"),
             release.apk.url + "?download=1",
             release.apk.url + "#fragment",
-            release.apk.url.replace("wangxso", "other"),
+            release.apk.url.replace("wakin0627", "other"),
             release.apk.url.replace("v0.1.2-test.1", "v0.1.1"),
         ).forEach { url ->
             expectUpdateError("UNTRUSTED_URL") { UpdateSource.requireDownloadUrl(url, release.version.tag, release.apk.name) }
