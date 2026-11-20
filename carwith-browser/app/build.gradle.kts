@@ -15,7 +15,7 @@ plugins {
  * Optional signed build suffix: -Pmcarplay.buildNumber=N.
  * Tagged releases use the base version; update it before publishing a new tag.
  */
-val appVersionName = "0.1.5"
+val appVersionName = "1.0.0"
 // 可覆盖安装的 remote 诊断包；兼容第一版诊断包的构建参数。
 val diagnosticsBuild =
     providers
@@ -164,7 +164,7 @@ android {
             // **不要加 applicationIdSuffix**：本项目 debug 包就是日常使用的包——
             // Shizuku 授权是按包名授予的，改包名会要求重新授权；AGENTS.md 里的
             // `run-as com.mcarplay.app` 调试链路也会一起失效。
-            versionNameSuffix = "-debug"
+            // Keep the requested 1.0.0 display version; this remains a debuggable, debug-signed build.
         }
     }
 

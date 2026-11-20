@@ -7,3 +7,11 @@ local.properties
 *.jks
 *.keystore
 extract-assets.js
+
+# Local legacy project files are retained locally but no longer published.
+/app/
+/tools/
+/build.gradle
+/settings.gradle
+/gradle.properties
+/CarMirrorStandalone-0.1.5-debug.apk

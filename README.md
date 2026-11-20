@@ -1,99 +1,13 @@
-# 车机投屏独立版（Root Android）
+# CarWith 网页投屏
 
-## 小米 13 CarWith 网页桥接测试版
+把手机上的小米 CarWith 画面、声音和触控桥接到同一 Wi-Fi 下的车机浏览器。当前版本从 **1.0.0** 开始维护。
 
-小米 13 / HyperOS 4 可试用 [CarWithBrowser-0.1.3-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/carwith-v0.1.3-test/CarWithBrowser-0.1.3-test.apk)。它通过手机本机的 CarWith/小米 CarLife 通道取得车载界面，再经同一 Wi-Fi 的 HTTPS 网页送到车机；手机屏幕可独立操作。车机浏览器打开 App 显示的网址，输入六位配对码即可连接。源码与验证边界见 [carwith-browser/BROWSER_BRIDGE.md](carwith-browser/BROWSER_BRIDGE.md)。此测试版尚未在小米 13 和真实车机上验证；它使用独立包名，可与下方原有投屏 App 共存。代码源于 [mcarplay](https://github.com/wangxso/mcarplay) 的 MIT 许可实现，保留其许可与署名。
+[下载 CarWithBrowser 1.0.0](https://github.com/wakin0627/car-mirror-standalone/releases/download/v1.0.0/CarWithBrowser-1.0.0-debug.apk) · [查看发布页](https://github.com/wakin0627/car-mirror-standalone/releases/tag/v1.0.0) · [使用与构建说明](carwith-browser/BROWSER_BRIDGE.md)
 
-## 原有屏幕镜像版
+手机需安装兼容的小米 CarWith 和小米 CarLife，车机浏览器需支持 WebCodecs、AudioWorklet 及访问本地 HTTPS。连接同一 Wi-Fi 后，在 App 中选择画面尺寸与比例，连接并在车机输入配对码；网页上可以开启声音、全屏和调整画面适配。
 
-### CarWith 网页桥接 0.1.5 测试版
+网页显示帧率上限提供 30、60、120 帧，实际帧率受 CarWith 输出、车机屏幕及浏览器性能限制。画面、触控、声音和后台运行仍取决于手机系统与车机，1.0.0 不代表所有设备已完成实测。
 
-[下载 CarWithBrowser-0.1.5-test.4.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.5-test.4/CarWithBrowser-0.1.5-test.4.apk)。网页新增 30/60/120 帧显示上限，默认最高 120；浏览器按刷新节奏显示最新帧以减少积压。CarWith 原有帧率请求不变。实际显示帧率受视频源、车机屏幕刷新率和浏览器性能限制，不会凭空产生新的视频帧。
+当前发布包为与旧版同签名的调试包，SHA-256：`7497F0781A8832CF1427316D861E83613DA1935CC91AA98190D2AD1AD4E56793`。
 
-900 项标准单元测试、24 项远程测试、网页测试、lint 和调试包构建通过；尚未在小米 13 Ultra 和车机验证。与 CarWith 网页桥接旧版签名一致。SHA-256：`A9851452617612495A191D55BFDDEB1FE140EBAF227380A726C8B53EE6F3152B`。
-
-### CarWith 网页桥接 0.1.4 测试版
-
-[下载 CarWithBrowser-0.1.4-test.1.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.4-test.1/CarWithBrowser-0.1.4-test.1.apk)。本版默认请求 1920 宽、16:10，可选 1280/1920/2560 宽与 30/60 帧请求；最终分辨率和帧率由 CarWith 与车机决定。优化浏览器参数变化后的重新解码和网络拥塞后的关键帧恢复；网页支持全屏与裁边铺满，左下角显示实际尺寸和帧率。
-
-需要手机上已安装小米 CarWith 与小米 CarLife，手机和车机连接同一 Wi-Fi。功能经过自动测试，仍需在小米 13 Ultra 和车机上验证。APK 与 CarWith 网页桥接 0.1.3 使用相同签名；它与独立屏幕 App 是不同应用。SHA-256：`A3A50BD71084DEECF7C1CF12C57786E221FA5FF97980007B78A6A0F5BEDC39E0`。
-
-### MagicDesk 投屏实验版 0.1.12
-
-[下载 CarDesktop-0.1.12-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.12-test/CarDesktop-0.1.12-test.apk)。恢复固定可见的网页控制按钮，音频捕获不再因开头 15 秒没有数据而超时；新增 30/60/90/120 FPS 上限设置，并改善 Wi-Fi 保活和网络切换时的服务行为。连接 MagicDesk 屏幕时默认允许 2560 宽编码。请在车机网页点击「开启车机声音」。
-
-120 FPS 为捕获上限，实际取决于手机屏幕、编码器、应用、Wi-Fi 和车机浏览器；后台与熄屏受 MagicDesk 和 HyperOS 电池策略影响。MagicDesk 桌面图标、视频应用全屏布局仍需实机排查，本版不保证修复。APK 和 lint 已验证；音频、后台、画面和性能均未在小米 13 Ultra 及车机实测。SHA-256：`9451DFE5EA0BD9608425FAECBB8E853BDDA059AAD50DAE9BD0ABB09D69C6E127`。
-
-### MagicDesk 独立屏幕实验版 0.1.11
-
-[下载 CarDesktop-0.1.11-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.11-test/CarDesktop-0.1.11-test.apk)。需另装 [MagicDesk 官方版](https://github.com/mekhontsev/magicdesk/releases/tag/v2.2.8)：在 MagicDesk 设置 Root 和桌面环境，创建虚拟屏并在该屏启动桌面，记录其屏幕 ID。在本 App 勾选「连接 MagicDesk 已有屏幕（实验）」并填写 ID，连接车机 Wi-Fi，在车机浏览器打开显示的网址。
-
-本模式捕获已有屏幕，不能保证 HyperOS 设备允许捕获或远程触控；画面、真实窗口、音频及性能仍需实机验证。屏幕 ID 随虚拟屏重建可能变化。不要同时开启其他占用端口的投屏程序。网页「应用列表」是本 App 的旧启动器，MagicDesk 桌面内请使用它自己的开始菜单。视频目前限制 30 FPS。APK SHA-256：`7232BB09119D5C5E85EE8E16868CA4D4381B8C4D9B0E546D5E68266D2FF62A21`。
-
-### 车机桌面实验版 0.1.10
-
-[下载 CarDesktop-0.1.10-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.10-test/CarDesktop-0.1.10-test.apk)。本版改进触屏操作：底栏固定提供「返回」「桌面」「应用」及当前应用切换按钮；应用列表可随时打开，窗口占满时可选择替换其中一个；窗口标题栏按钮也已加大。画质、声音及连接选项位于「更多」。
-
-开启 App 的「双应用桌面（实验）」连接并配对。仍只支持两个独立应用窗口，窗口缩放仅缩放画面，不会重新排版；不是完整的三星 DeX。需要在小米 13 Ultra 和车机上验证。SHA-256：`89D7B4B29F3AC13CAE48C704A567568E1AC00B8F9A2FA390349A4E987F2D87EF`。
-
-### 车机桌面实验版 0.1.9
-
-[下载 CarDesktop-0.1.9-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.9-test/CarDesktop-0.1.9-test.apk)。手机勾选「双应用桌面（实验）」并连接；车机打开网址，输入配对码，在桌面选择应用。最多同时打开两个窗口；可拖动标题栏、拖动右下角缩放、最小化和最大化。底栏「桌面」隐藏窗口，点任务按钮恢复。声音通过底栏「开启车机声音」开启。
-
-这是网页桌面加两个独立虚拟屏的实验方案，不是三星 DeX：缩放窗口只缩放画面，应用布局不会跟随窗口重新排版，应用图标目前使用名称首字。各应用对虚拟屏的兼容性、触控、声音及后台稳定性须在小米 13 Ultra 和车机上实测。车机浏览器需支持 WebCodecs 和 AudioWorklet，且接受手机的 HTTPS 证书。覆盖安装同包名旧版。SHA-256：`8572B262007FCBC9DB1AF0A4347499857B8728E7BA4967125A35FB2B94B0E77A`。
-
-### 双应用桌面实验版
-
-[下载 CarDesktop-0.1.8-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.8-test/CarDesktop-0.1.8-test.apk)。此版新增「双应用桌面」：在手机勾选后分别选择左右应用，连接车机 Wi-Fi 并授予 Root；在车机浏览器打开手机显示的网址、输入手机显示的六位配对码。网页的两个应用窗口可以通过标题栏拖动，通过右下角调整显示大小，每个窗口有自己的返回按钮。点「开启车机声音」播放手机的一路系统音频。
-
-实现方式参考 [FT 的独立屏分屏思路](https://github.com/OneAboveAll1964/ft-app)，使用内置的 scrcpy 服务分别创建两个虚拟屏；没有打包 FT。网页调整窗口大小只缩放显示画面，暂不改变应用的虚拟屏尺寸，可能出现留边。此版本不使用 CarWith；请先断开 CarWith 网页桥接。已有应用的任务可能被 Android 移到车机虚拟屏；断开后虚拟屏上的应用可能关闭或返回手机。画面、触控、音频与后台稳定性均需在小米 13 Ultra 和车机实测，受系统、视频编码器及应用限制。车机浏览器需要 WebCodecs、AudioWorklet 和接受手机生成的 HTTPS 证书。APK 会覆盖旧的独立屏幕 App，与 CarWith 桥接 App 分开。SHA-256：`398B0343DF9E25421ECE3928235E5B9FE4FED91B2A941DD145C55FF1C339DB4E`。
-
-### 单屏窗口实验版
-
-[下载 CarDesktop-0.1.7-test.apk](https://github.com/wakin0627/car-mirror-standalone/releases/download/v0.1.7-test/CarDesktop-0.1.7-test.apk)。此版基于本仓库的独立屏幕镜像版，使用 scrcpy 在手机创建车机虚拟屏；并非 CarWith 界面。先断开 CarWith 网页桥接，打开此版选择「车机独立屏幕」、连接后在车机浏览器打开网址。点网页「应用列表」，选「左侧窗口」并打开地图，再点「应用列表」，选「右侧窗口」并打开视频。
-
-0.1.7 新增「尝试系统窗口边框」开关，向 Android 请求在虚拟屏显示系统窗口装饰；系统若支持，可能提供拖动和缩放。左右窗口仍是实验功能，系统可能忽略窗口尺寸、只显示一个应用、拒绝启动或影响音频；小米 13 和车机上尚未验证。若出现黑屏可关闭该选项并重连。此 APK 与旧独立屏幕 App 同包名，安装将覆盖旧版；与 CarWith 网页桥接为不同 App。SHA-256：`CF246B0B1430EEE8E18EFE1C98C15318FC6CE901E6D2906CBD1BF1A31058A51C`。
-
-Android App 内置 scrcpy 3.1 服务端、HTTPS 网页、视频转发、触控反控与系统音频转发。目标是手机安装 APK 后直接操作，无需在手机安装 Termux、Node.js，也无需每次通过电脑运行 ADB 命令。
-
-## 下载
-
-下载 [CarMirrorStandalone-0.1.5-debug.apk](CarMirrorStandalone-0.1.5-debug.apk)，在 Android 手机上安装。此包为 **0.1.5 调试版原型**，独立屏幕模式仍需在真实车机上验证。APK 的 SHA-256：`13885D66579FA13927DF47C78E002CCEBD00BE98209E0B802413001C80625BA2`。
-
-0.1.1 起默认不再修改手机的分辨率和 DPI，以免手机屏幕触点失准。需要车机 16:10 平板布局时，可手动勾选「强制平板比例」，但这可能再次影响手机触控。0.1.2 根据车机的 RSA 握手错误，改为在每台手机的 App 私有目录生成软件 TLS 密钥与证书，避开 Android Keystore 的 RSA 握手故障。证书为自签名，车机浏览器可能要求首次确认；是否解决这台车机的连接失败，还需在车机上验证。
-
-0.1.3 将最高帧率设为 30，按画质档位选择码率，缩短视频发送队列，并直接绘制解码帧，以减少操作后画面落后。车机网页左下角会显示实际视频尺寸和解码帧率；右侧「铺满屏幕（裁边）」可以去掉黑边，但会裁去部分画面，点「显示完整画面」可切回。此选项不会改变手机分辨率。
-
-0.1.4 修复手机 App 状态被单次无效 HTTPS 请求覆盖的问题。车机视频连接成功后显示「车机已连接」；连接期间，其他客户端的 TLS 报错只写入日志，不再遮盖正常连接状态。视频断开后显示「服务已启动，等待车机」。
-
-0.1.5 默认新增车机独立屏幕：用 scrcpy 虚拟显示器生成横屏平板画面，不改手机实体屏幕的分辨率、DPI 和方向。可选 16:10、16:9、2:1 车机比例与宽 1280、1920、2560 的画质；车机网页「应用列表」可打开手机应用。若个别手机的虚拟显示器无法启动，可取消「车机独立屏幕」回到旧版镜像模式。新增 App 内「检查更新」：从本仓库 GitHub Release 下载、校验 SHA-256 与签名，再交给 Android 系统安装；首次使用需允许本 App 安装未知应用。更新时手机需要能访问 GitHub。另有 `http://手机IP:8080/` 诊断页，用于测试车机是否能连到手机，不承载投屏。
-
-这是使用 Android 调试密钥签名的安装包。后续若改用正式签名，可能需要卸载此版后再安装；卸载会清除本 App 的数据。
-
-## 适用范围
-
-- Android 11 及以上、已 Root 且可给 App 授权 `su` 的手机。
-- 手机与车机连接同一个 Wi-Fi，车机浏览器支持 WebCodecs、AudioWorklet 和 HTTPS。
-- 独立屏幕可选 16:10、16:9、2:1；应用仍可能因自身限制只支持竖屏。旧版镜像模式仍可用，其画面比例由手机决定。
-
-## 使用
-
-1. 在手机直接安装 APK，连接车机 Wi-Fi。
-2. 打开「车机投屏」，选画质和车机屏幕比例，点「连接车机」，首次授予 Root 权限。
-3. 在车机浏览器打开 App 显示的地址，首次接受手机生成的本地 HTTPS 证书。
-4. 网页点「开启车机声音」和「应用列表」。浏览器的音频播放需要用户点按。
-5. 使用结束后在 App、车机网页或通知栏点「断开」。App 会恢复启动前的显示设置、亮度与屏幕超时。Wi-Fi 断开时也会停止投屏。
-
-需要让手机变暗时，使用网页「调暗手机屏幕」按钮；直接按手机电源键可能让采集画面暂停。
-
-连接期间，scrcpy 的 `output` 音源接管手机系统输出并转发到网页；断开时释放音频捕获，由 Android 恢复原来的输出路由。若手机仍连接蓝牙音箱，Android 可能恢复到蓝牙而非机身扬声器。
-
-## 现阶段验证
-
-这是可编译的独立版原型。当前已完成 APK 构建和静态检查；新虚拟显示器、App 内安装更新、车机浏览器音频和不同品牌的表现仍需在真实手机上验证后才能称为稳定版。
-
-## 构建
-
-需要 JDK 17、Android SDK Platform 35、Build Tools 35.0.0、Gradle 8.13。运行 `gradle assembleDebug`。APK 输出位于 `app/build/outputs/apk/debug/app-debug.apk`。
-
-本项目内附 scrcpy v3.1 服务端，其 [Apache 2.0 许可](https://github.com/Genymobile/scrcpy/blob/v3.1/LICENSE) 见 APK assets 中的 `SCRCPY-LICENSE.txt`。
+源码位于 [carwith-browser](carwith-browser/)，基于 [mcarplay](https://github.com/wangxso/mcarplay)，相关许可和第三方声明见 [LICENSE](LICENSE)、[NOTICE](carwith-browser/NOTICE) 与 [THIRD_PARTY_NOTICES.md](carwith-browser/THIRD_PARTY_NOTICES.md)。
